@@ -61,31 +61,6 @@
     const ADMIN_SISTEMA = "renataalcantaraferreira@gmail.com";
     const SENHA_MESTRE_CORRETA = "69472";
 
-    // Componente do Ícone com Gradiente Oficial (Ciano/Verde) e Arcos Brancos
-    const IconeSimboloEnergisa = ({ className = "w-9 h-9" }) => (
-      <svg viewBox="0 0 512 512" className={className} xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <linearGradient id="gradLogoOficial" x1="0%" y1="100%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#00A2D3" />
-            <stop offset="35%" stopColor="#00B8A9" />
-            <stop offset="70%" stopColor="#55BA47" />
-            <stop offset="100%" stopColor="#82C341" />
-          </linearGradient>
-          <clipPath id="clipBordasLogo">
-            <rect width="512" height="512" rx="100" ry="100" />
-          </clipPath>
-        </defs>
-        <g clipPath="url(#clipBordasLogo)">
-          {/* Fundo Gradiente */}
-          <rect width="512" height="512" fill="url(#gradLogoOficial)" />
-          {/* Asa/Curva Superior */}
-          <path d="M100 0 C 230 40, 345 130, 345 230 C 345 200, 270 140, 238 242 C 300 130, 220 30, 100 0 Z" fill="#FFFFFF" />
-          {/* Corpo Principal e Cauda Inferior */}
-          <path d="M240 148 C 160 180, 116 270, 116 390 C 116 350, 105 320, 71 368 C 85 460, 195 512, 455 512 C 310 470, 175 390, 240 148 Z" fill="#FFFFFF" />
-        </g>
-      </svg>
-    );
-
     const gerarCarimboAuditoria = (emailUsuario) => {
       const agora = new Date();
       const horas = String(agora.getHours()).padStart(2, '0');
@@ -634,11 +609,9 @@
             )}
 
             <div className="bg-[#051622]/95 border border-cyan-800/50 rounded-3xl p-8 sm:p-10 max-w-md w-full shadow-2xl space-y-6 text-center backdrop-blur-md">
-              <div className="flex flex-col items-center">
-                <div className="w-16 h-16 rounded-2xl bg-transparent border border-cyan-700/40 flex items-center justify-center p-1 shadow-md mb-3">
-                  <IconeSimboloEnergisa className="w-14 h-14" />
-                </div>
-                <h1 className="text-xl font-extrabold text-white">Acesso Restrito</h1>
+              <div>
+                <span className="text-4xl">🔒</span>
+                <h1 className="text-xl font-extrabold text-white mt-3">Acesso Restrito</h1>
                 <p className="text-xs text-zinc-300 mt-1">
                   Informe seu e-mail corporativo para solicitar ou validar o acesso ao sistema.
                 </p>
@@ -720,7 +693,7 @@
       }
 
       // =======================================================================
-      // APLICAÇÃO PRINCIPAL COM O LOGOTIPO ATUALIZADO
+      // APLICAÇÃO PRINCIPAL
       // =======================================================================
       return (
         <div className="min-h-screen flex flex-col">
@@ -732,12 +705,9 @@
             </div>
           )}
 
-          {/* HEADER COM O LOGO NOVO */}
+          {/* HEADER LIMPO */}
           <header className="border-b border-cyan-800/40 bg-[#04121A]/90 px-4 sm:px-8 py-3.5 flex items-center justify-between sticky top-0 z-30 backdrop-blur-md">
-            <button type="button" onClick={() => setTelaAtual('capa')} className="flex items-center gap-3 hover:opacity-90 transition text-left">
-              <div className="w-9 h-9 rounded-xl bg-transparent border border-cyan-700/40 flex items-center justify-center p-0.5 shadow-md shadow-black/40">
-                <IconeSimboloEnergisa className="w-8 h-8" />
-              </div>
+            <button type="button" onClick={() => setTelaAtual('capa')} className="hover:opacity-90 transition text-left">
               <span className="font-extrabold text-white text-sm sm:text-base tracking-wide">
                 Controle e solicitação de EED
               </span>
