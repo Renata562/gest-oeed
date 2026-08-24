@@ -593,7 +593,7 @@
       };
 
       // =======================================================================
-      // TELA DE BLOQUEIO INICIAL
+      // TELA DE BLOQUEIO INICIAL (SEM A IMAGEM DO SÍMBOLO)
       // =======================================================================
       if (!usuarioLogado) {
         const digitouAdmin = emailInputLogin.trim().toLowerCase() === ADMIN_SISTEMA.toLowerCase();
@@ -609,9 +609,9 @@
             )}
 
             <div className="bg-[#051622]/95 border border-cyan-800/50 rounded-3xl p-8 sm:p-10 max-w-md w-full shadow-2xl space-y-6 text-center backdrop-blur-md">
-              <div>
-                <span className="text-4xl">🔒</span>
-                <h1 className="text-xl font-extrabold text-white mt-3">Acesso Restrito</h1>
+              <div className="flex flex-col items-center">
+                <span className="text-4xl mb-2">🔒</span>
+                <h1 className="text-xl font-extrabold text-white">Acesso Restrito</h1>
                 <p className="text-xs text-zinc-300 mt-1">
                   Informe seu e-mail corporativo para solicitar ou validar o acesso ao sistema.
                 </p>
@@ -693,7 +693,7 @@
       }
 
       // =======================================================================
-      // APLICAÇÃO PRINCIPAL
+      // APLICAÇÃO PRINCIPAL (SEM O SÍMBOLO)
       // =======================================================================
       return (
         <div className="min-h-screen flex flex-col">
