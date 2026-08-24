@@ -18,21 +18,15 @@
   <!-- SheetJS para importação/exportação Excel -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
   <style>
-    ::-webkit-scrollbar {
-      width: 8px;
-      height: 8px;
-    }
-    ::-webkit-scrollbar-track {
-      background: #07131D;
-    }
-    ::-webkit-scrollbar-thumb {
-      background: #0C5283;
-      border-radius: 4px;
-    }
-    ::-webkit-scrollbar-thumb:hover {
-      background: #EA580C;
-    }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: #07131D; }
+    ::-webkit-scrollbar-thumb { background: #0C5283; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #EA580C; }
   </style>
 </head>
 <body class="bg-[#07131D] text-zinc-100 font-sans antialiased min-h-screen">
@@ -41,9 +35,26 @@
   <script type="text/babel">
     const { useState, useEffect, useMemo, useRef } = React;
 
+    // ==========================================
+    // CONFIGURAÇÃO DO FIREBASE (eed-fi-re)
+    // ==========================================
+    const firebaseConfig = {
+      apiKey: "AIzaSyCiXHFPQiPNH-90-26oRiIgt15KIqnaM9E",
+      authDomain: "eed-fi-re.firebaseapp.com",
+      projectId: "eed-fi-re",
+      storageBucket: "eed-fi-re.firebasestorage.app",
+      messagingSenderId: "437178422694",
+      appId: "1:437178422694:web:bd5c3f885d9ff39d02ab67",
+      measurementId: "G-1VCT22BD4Q"
+    };
+
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+    const db = firebase.firestore();
+
     const ADMIN_SISTEMA = "renataalcantaraferreira@gmail.com";
-    // Hash SHA-256 da senha '1240' para evitar exposição direta no código-fonte
-    const HASH_SENHA_MESTRE = "d8563de3091e129a6b04f5a37d426f7574287f34be8549b812168dcb9c16da37";
+    const HASH_SENHA_MESTRE = "d8563de3091e129a6b04f5a37d426f7574287f34be8549b812168dcb9c16da37"; // SHA-256 de "1240"
 
     const calcularHashSHA256 = async (texto) => {
       const encoder = new TextEncoder();
@@ -63,85 +74,77 @@
       return `${identificador} às ${horas}h${minutos} (${dia}/${mes})`;
     };
 
-    const DADOS_INICIAIS_ESTOQUE = [
-      {
-        id: '1',
-        empreiteira: 'COMPEL-DOU',
-        codigoMaterial: '690005',
-        descSimplificada: 'RD - 3F 38kV 630A',
-        saldoFisico: 2,
-        codDeposito: '2904',
-        supervisao: 'Dourados',
-        tipoDeposito: 'Anônimo',
-        marcaEquipamento: 'Noja Power',
-        observacao: 'Estoque atualizado em 31/07',
-        ultimaAlteracao: 'renata às 12h20 (31/07)'
-      }
-    ];
-
     function App() {
       const inputArquivoExcelRef = useRef(null);
 
       // ==========================================
-      // CONTROLE DE ACESSO & PENDÊNCIAS
+      // CONTROLE DE ACESSO SINCRONIZADO NA NUVEM
       // ==========================================
-      const [usuariosPermitidos, setUsuariosPermitidos] = useState(() => {
-        const salvos = localStorage.getItem('usuarios_eed_energisa_v2');
-        return salvos ? JSON.parse(salvos) : [ADMIN_SISTEMA];
-      });
-
-      const [solicitacoesAcesso, setSolicitacoesAcesso] = useState(() => {
-        const salvos = localStorage.getItem('solicitacoes_acesso_eed_energisa');
-        return salvos ? JSON.parse(salvos) : [];
-      });
-
-      const [usuarioLogado, setUsuarioLogado] = useState(() => {
-        return localStorage.getItem('usuario_logado_eed_energisa_v2') || null;
-      });
-
+      const [usuariosPermitidos, setUsuariosPermitidos] = useState([ADMIN_SISTEMA]);
+      const [solicitacoesAcesso, setSolicitacoesAcesso] = useState([]);
+      const [usuarioLogado, setUsuarioLogado] = useState(() => localStorage.getItem('usuario_logado_eed_energisa_v2') || null);
       const [emailInputLogin, setEmailInputLogin] = useState('');
       const [mensagemProcessamento, setMensagemProcessamento] = useState(false);
       const [novoEmailAcesso, setNovoEmailAcesso] = useState('');
 
       useEffect(() => {
-        localStorage.setItem('usuarios_eed_energisa_v2', JSON.stringify(usuariosPermitidos));
-      }, [usuariosPermitidos]);
+        const docRef = db.collection('sistema_eed').doc('acessos');
+        const unsub = docRef.onSnapshot((doc) => {
+          if (doc.exists) {
+            const data = doc.data();
+            const permitidos = data.permitidos || [ADMIN_SISTEMA];
+            const pendentes = data.pendentes || [];
+            
+            if (!permitidos.map(u => u.toLowerCase()).includes(ADMIN_SISTEMA.toLowerCase())) {
+              permitidos.unshift(ADMIN_SISTEMA);
+            }
+            setUsuariosPermitidos(permitidos);
+            setSolicitacoesAcesso(pendentes);
 
-      useEffect(() => {
-        localStorage.setItem('solicitacoes_acesso_eed_energisa', JSON.stringify(solicitacoesAcesso));
-      }, [solicitacoesAcesso]);
-
-      useEffect(() => {
-        const escutarAlteracoesAbas = (evento) => {
-          if (evento.key === 'usuarios_eed_energisa_v2' && evento.newValue) {
-            setUsuariosPermitidos(JSON.parse(evento.newValue));
+            if (usuarioLogado && !permitidos.map(u => u.toLowerCase()).includes(usuarioLogado.toLowerCase())) {
+              setUsuarioLogado(null);
+              localStorage.removeItem('usuario_logado_eed_energisa_v2');
+            }
+          } else {
+            docRef.set({ permitidos: [ADMIN_SISTEMA], pendentes: [] });
           }
-          if (evento.key === 'solicitacoes_acesso_eed_energisa' && evento.newValue) {
-            setSolicitacoesAcesso(JSON.parse(evento.newValue));
-          }
-        };
-        window.addEventListener('storage', escutarAlteracoesAbas);
-        return () => window.removeEventListener('storage', escutarAlteracoesAbas);
-      }, []);
+        }, (err) => {
+          console.error("Erro ao sincronizar acessos:", err);
+        });
+        return () => unsub();
+      }, [usuarioLogado]);
 
       const ehAdministrador = useMemo(() => {
         return usuarioLogado && usuarioLogado.toLowerCase() === ADMIN_SISTEMA.toLowerCase();
       }, [usuarioLogado]);
 
-      const processarEntradaUsuario = (e) => {
+      const processarEntradaUsuario = async (e) => {
         e.preventDefault();
         const emailNormalizado = emailInputLogin.trim().toLowerCase();
         if (!emailNormalizado) return;
 
-        if (usuariosPermitidos.map(u => u.toLowerCase()).includes(emailNormalizado)) {
+        const docRef = db.collection('sistema_eed').doc('acessos');
+        const doc = await docRef.get();
+        let permitidos = [ADMIN_SISTEMA];
+        let pendentes = [];
+
+        if (doc.exists) {
+          permitidos = doc.data().permitidos || [ADMIN_SISTEMA];
+          pendentes = doc.data().pendentes || [];
+        }
+
+        if (permitidos.map(u => u.toLowerCase()).includes(emailNormalizado)) {
           setUsuarioLogado(emailNormalizado);
           localStorage.setItem('usuario_logado_eed_energisa_v2', emailNormalizado);
           setMensagemProcessamento(false);
           setEmailInputLogin('');
-          dispararNotificacao('Acesso autenticado com sucesso!');
+          dispararNotificacao('Acesso autorizado!');
         } else {
-          if (!solicitacoesAcesso.includes(emailNormalizado)) {
-            setSolicitacoesAcesso(prev => [...prev, emailNormalizado]);
+          if (!pendentes.includes(emailNormalizado)) {
+            await docRef.set({
+              permitidos,
+              pendentes: [...pendentes, emailNormalizado]
+            }, { merge: true });
           }
           setMensagemProcessamento(true);
         }
@@ -155,53 +158,81 @@
         dispararNotificacao('Sessão encerrada.');
       };
 
-      const aprovarSolicitacao = (emailAprovar) => {
-        setUsuariosPermitidos(prev => [...prev, emailAprovar]);
-        setSolicitacoesAcesso(prev => prev.filter(e => e.toLowerCase() !== emailAprovar.toLowerCase()));
+      const aprovarSolicitacao = async (emailAprovar) => {
+        const docRef = db.collection('sistema_eed').doc('acessos');
+        const novosPermitidos = Array.from(new Set([...usuariosPermitidos, emailAprovar.toLowerCase()]));
+        const novosPendentes = solicitacoesAcesso.filter(e => e.toLowerCase() !== emailAprovar.toLowerCase());
+        
+        await docRef.update({
+          permitidos: novosPermitidos,
+          pendentes: novosPendentes
+        });
         dispararNotificacao(`Acesso aprovado para ${emailAprovar}`);
       };
 
-      const rejeitarSolicitacao = (emailRejeitar) => {
-        setSolicitacoesAcesso(prev => prev.filter(e => e.toLowerCase() !== emailRejeitar.toLowerCase()));
+      const rejeitarSolicitacao = async (emailRejeitar) => {
+        const docRef = db.collection('sistema_eed').doc('acessos');
+        const novosPendentes = solicitacoesAcesso.filter(e => e.toLowerCase() !== emailRejeitar.toLowerCase());
+        await docRef.update({ pendentes: novosPendentes });
         dispararNotificacao(`Solicitação de ${emailRejeitar} removida.`);
       };
 
-      const liberarNovoAcessoManual = (e) => {
+      const liberarNovoAcessoManual = async (e) => {
         e.preventDefault();
         const email = novoEmailAcesso.trim().toLowerCase();
         if (!email) return;
+
         if (usuariosPermitidos.map(u => u.toLowerCase()).includes(email)) {
           dispararNotificacao('E-mail já cadastrado.', 'erro');
           return;
         }
-        setUsuariosPermitidos(prev => [...prev, email]);
-        setSolicitacoesAcesso(prev => prev.filter(e => e.toLowerCase() !== email));
+
+        const docRef = db.collection('sistema_eed').doc('acessos');
+        const novosPermitidos = [...usuariosPermitidos, email];
+        const novosPendentes = solicitacoesAcesso.filter(e => e.toLowerCase() !== email);
+
+        await docRef.update({
+          permitidos: novosPermitidos,
+          pendentes: novosPendentes
+        });
         setNovoEmailAcesso('');
         dispararNotificacao('Acesso concedido com sucesso.');
       };
 
-      const revogarAcesso = (emailRemover) => {
+      const revogarAcesso = async (emailRemover) => {
         if (emailRemover.toLowerCase() === ADMIN_SISTEMA.toLowerCase()) {
           dispararNotificacao('Não é possível remover o acesso principal.', 'erro');
           return;
         }
-        setUsuariosPermitidos(prev => prev.filter(u => u.toLowerCase() !== emailRemover.toLowerCase()));
+        const docRef = db.collection('sistema_eed').doc('acessos');
+        const novosPermitidos = usuariosPermitidos.filter(u => u.toLowerCase() !== emailRemover.toLowerCase());
+        await docRef.update({ permitidos: novosPermitidos });
         dispararNotificacao('Acesso revogado.');
       };
 
       // ==========================================
-      // ESTADOS DE NAVEGAÇÃO E DADOS
+      // ESTADOS DE ESTOQUE E SOLICITAÇÕES
       // ==========================================
       const [telaAtual, setTelaAtual] = useState('capa');
-
-      const [materiais, setMateriais] = useState(() => {
-        const dados = localStorage.getItem('estoque_eed_energisa');
-        return dados ? JSON.parse(dados) : DADOS_INICIAIS_ESTOQUE;
-      });
+      const [materiais, setMateriais] = useState([]);
+      const [solicitacoes, setSolicitacoes] = useState([]);
 
       useEffect(() => {
-        localStorage.setItem('estoque_eed_energisa', JSON.stringify(materiais));
-      }, [materiais]);
+        const unsubEstoque = db.collection('estoque_eed').onSnapshot(snap => {
+          const dados = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          setMateriais(dados);
+        });
+
+        const unsubSolicitacoes = db.collection('solicitacoes_eed').onSnapshot(snap => {
+          const dados = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          setSolicitacoes(dados);
+        });
+
+        return () => {
+          unsubEstoque();
+          unsubSolicitacoes();
+        };
+      }, []);
 
       const [filtroEmpreiteira, setFiltroEmpreiteira] = useState('');
       const [filtroCodigoMaterial, setFiltroCodigoMaterial] = useState('');
@@ -223,16 +254,6 @@
       const [campoMarcaEquipamento, setCampoMarcaEquipamento] = useState('');
       const [campoObservacao, setCampoObservacao] = useState('');
 
-      // Solicitações de EED
-      const [solicitacoes, setSolicitacoes] = useState(() => {
-        const dados = localStorage.getItem('solicitacoes_eed_energisa');
-        return dados ? JSON.parse(dados) : [];
-      });
-
-      useEffect(() => {
-        localStorage.setItem('solicitacoes_eed_energisa', JSON.stringify(solicitacoes));
-      }, [solicitacoes]);
-
       const [modalSolicitacaoAberto, setModalSolicitacaoAberto] = useState(false);
       const [solicitacaoObra, setSolicitacaoObra] = useState('');
       const [solicitacaoSigco, setSolicitacaoSigco] = useState('');
@@ -241,32 +262,8 @@
       const [solicitacaoEmpreiteira, setSolicitacaoEmpreiteira] = useState('');
       const [solicitacaoDataProgramacao, setSolicitacaoDataProgramacao] = useState('');
       const [solicitacaoObservacao, setSolicitacaoObservacao] = useState('');
-      const [listaItensSolicitacao, setListaItensSolicitacao] = useState([
-        { material: '', quantidade: 1 }
-      ]);
+      const [listaItensSolicitacao, setListaItensSolicitacao] = useState([{ material: '', quantidade: 1 }]);
 
-      const atualizarStatusSolicitacao = (id, novoStatus) => {
-        const carimbo = gerarCarimboAuditoria(usuarioLogado);
-        setSolicitacoes(prev => prev.map(sol => {
-          if (sol.id === id) {
-            return { ...sol, status: novoStatus, ultimaAlteracao: carimbo };
-          }
-          return sol;
-        }));
-        dispararNotificacao('Status atualizado!');
-      };
-
-      const atualizarCodigoEMD = (id, codigo) => {
-        const carimbo = gerarCarimboAuditoria(usuarioLogado);
-        setSolicitacoes(prev => prev.map(sol => {
-          if (sol.id === id) {
-            return { ...sol, codigoEMD: codigo, ultimaAlteracao: carimbo };
-          }
-          return sol;
-        }));
-      };
-
-      // Modal Senha
       const [modalSenhaAberto, setModalSenhaAberto] = useState(false);
       const [senhaDigitada, setSenhaDigitada] = useState('');
       const [exibirErroSenha, setExibirErroSenha] = useState(false);
@@ -277,6 +274,23 @@
       const dispararNotificacao = (mensagem, tipo = 'sucesso') => {
         setNotificacao({ mensagem, tipo });
         setTimeout(() => setNotificacao(null), 4000);
+      };
+
+      const atualizarStatusSolicitacao = async (id, novoStatus) => {
+        const carimbo = gerarCarimboAuditoria(usuarioLogado);
+        await db.collection('solicitacoes_eed').doc(id).update({
+          status: novoStatus,
+          ultimaAlteracao: carimbo
+        });
+        dispararNotificacao('Status atualizado!');
+      };
+
+      const atualizarCodigoEMD = async (id, codigo) => {
+        const carimbo = gerarCarimboAuditoria(usuarioLogado);
+        await db.collection('solicitacoes_eed').doc(id).update({
+          codigoEMD: codigo,
+          ultimaAlteracao: carimbo
+        });
       };
 
       const abrirModalNovaSolicitacao = () => {
@@ -291,15 +305,11 @@
         setModalSolicitacaoAberto(true);
       };
 
-      const adicionarLinhaMaterial = () => {
-        setListaItensSolicitacao(prev => [...prev, { material: '', quantidade: 1 }]);
-      };
-
+      const adicionarLinhaMaterial = () => setListaItensSolicitacao(prev => [...prev, { material: '', quantidade: 1 }]);
       const removerLinhaMaterial = (index) => {
         if (listaItensSolicitacao.length === 1) return;
         setListaItensSolicitacao(prev => prev.filter((_, i) => i !== index));
       };
-
       const atualizarItemMaterial = (index, campo, valor) => {
         setListaItensSolicitacao(prev => {
           const itens = [...prev];
@@ -308,7 +318,7 @@
         });
       };
 
-      const salvarSolicitacao = (e) => {
+      const salvarSolicitacao = async (e) => {
         e.preventDefault();
         const itensValidos = listaItensSolicitacao.filter(item => item.material.trim() !== '');
         
@@ -317,19 +327,17 @@
           return;
         }
 
-        const nomesMateriais = itensValidos.map(item => item.material.trim().toLowerCase());
-        const temDuplicado = nomesMateriais.some((nome, idx) => nomesMateriais.indexOf(nome) !== idx);
-
-        if (temDuplicado) {
-          dispararNotificacao('Não é permitido adicionar o mesmo EED duplicado nesta solicitação. Ajuste as quantidades em um único item.', 'erro');
+        const nomes = itensValidos.map(item => item.material.trim().toLowerCase());
+        if (nomes.some((n, idx) => nomes.indexOf(n) !== idx)) {
+          dispararNotificacao('Não é permitido adicionar o mesmo EED duplicado.', 'erro');
           return;
         }
 
         const carimbo = gerarCarimboAuditoria(usuarioLogado);
         const novaSolicitacao = {
-          id: Math.random().toString(36).substring(2, 9),
           solicitante: usuarioLogado,
           dataRegistro: new Date().toLocaleDateString('pt-BR'),
+          dataHoraCriacao: new Date().toISOString(),
           obra: solicitacaoObra.trim(),
           sigco: solicitacaoSigco.trim(),
           supervisao: solicitacaoSupervisao.trim(),
@@ -343,17 +351,133 @@
           ultimaAlteracao: carimbo
         };
 
-        setSolicitacoes(prev => [novaSolicitacao, ...prev]);
+        await db.collection('solicitacoes_eed').add(novaSolicitacao);
         setModalSolicitacaoAberto(false);
-        dispararNotificacao('Solicitação gravada com sucesso!');
+        dispararNotificacao('Solicitação gravada na nuvem!');
+      };
+
+      const salvarMaterial = async (e) => {
+        e.preventDefault();
+        const cod = campoCodigoMaterial.trim().toLowerCase();
+        const emp = campoEmpreiteira.trim().toLowerCase();
+        const dep = campoCodDeposito.trim().toLowerCase();
+
+        const jaExiste = materiais.some(item => {
+          if (materialEmEdicao && item.id === materialEmEdicao.id) return false;
+          return (item.codigoMaterial || '').toLowerCase() === cod &&
+                 (item.empreiteira || '').toLowerCase() === emp &&
+                 (item.codDeposito || '').toLowerCase() === dep;
+        });
+
+        if (jaExiste) {
+          dispararNotificacao('Material já cadastrado para este depósito e empreiteira.', 'erro');
+          return;
+        }
+
+        const carimbo = gerarCarimboAuditoria(usuarioLogado);
+        const dados = {
+          empreiteira: campoEmpreiteira.trim(),
+          codigoMaterial: campoCodigoMaterial.trim(),
+          descSimplificada: campoDescSimplificada.trim(),
+          saldoFisico: Number(campoSaldoFisico),
+          codDeposito: campoCodDeposito.trim(),
+          supervisao: campoSupervisao.trim(),
+          tipoDeposito: campoTipoDeposito.trim(),
+          marcaEquipamento: campoMarcaEquipamento.trim(),
+          observacao: campoObservacao.trim(),
+          ultimaAlteracao: carimbo
+        };
+
+        if (materialEmEdicao) {
+          await db.collection('estoque_eed').doc(materialEmEdicao.id).update(dados);
+          dispararNotificacao('Material atualizado!');
+        } else {
+          await db.collection('estoque_eed').add(dados);
+          dispararNotificacao('Material gravado na nuvem!');
+        }
+        setModalMaterialAberto(false);
+      };
+
+      const processarArquivoExcel = (e) => {
+        const arquivo = e.target.files[0];
+        if (!arquivo) return;
+        const leitor = new FileReader();
+        leitor.onload = async (evento) => {
+          try {
+            const bin = evento.target.result;
+            const pasta = XLSX.read(bin, { type: 'binary' });
+            const aba = pasta.Sheets[pasta.SheetNames[0]];
+            const linhas = XLSX.utils.sheet_to_json(aba);
+            if (!linhas || linhas.length === 0) {
+              dispararNotificacao('A planilha está vazia.', 'erro');
+              return;
+            }
+            const carimbo = gerarCarimboAuditoria(usuarioLogado);
+            const batch = db.batch();
+
+            linhas.forEach((linha, index) => {
+              const docRef = db.collection('estoque_eed').doc();
+              batch.set(docRef, {
+                empreiteira: String(linha['Empreiteira'] || 'Geral').trim(),
+                codigoMaterial: String(linha['Código Material'] || linha['Código do Material'] || `69000${index + 1}`).trim(),
+                descSimplificada: String(linha['Descrição Simplificada'] || linha['Desc Material'] || 'Item sem descrição').trim(),
+                saldoFisico: Number(linha['Saldo Físico'] || linha['Quantidade'] || 0),
+                codDeposito: String(linha['Cod Depósito'] || '0001').trim(),
+                supervisao: String(linha['Supervisão'] || '').trim(),
+                tipoDeposito: String(linha['Tipo Depósito'] || 'Almoxarifado').trim(),
+                marcaEquipamento: String(linha['Marca'] || '').trim(),
+                observacao: String(linha['Observação'] || '').trim(),
+                ultimaAlteracao: carimbo
+              });
+            });
+
+            await batch.commit();
+            dispararNotificacao(`Importados ${linhas.length} itens para a nuvem!`);
+          } catch (err) {
+            dispararNotificacao('Erro ao processar arquivo.', 'erro');
+          } finally {
+            e.target.value = '';
+          }
+        };
+        leitor.readAsBinaryString(arquivo);
+      };
+
+      const solicitarSenhaParaAcao = (tipoAcao, idItem = null) => {
+        setAcaoProtegida(tipoAcao);
+        setIdItemParaExcluir(idItem);
+        setSenhaDigitada('');
+        setExibirErroSenha(false);
+        setModalSenhaAberto(true);
+      };
+
+      const validarSenhaEExecutar = async (e) => {
+        e.preventDefault();
+        const hashDigitado = await calcularHashSHA256(senhaDigitada);
+        if (hashDigitado !== HASH_SENHA_MESTRE) {
+          setExibirErroSenha(true);
+          return;
+        }
+
+        const acao = acaoProtegida;
+        const idExcluir = idItemParaExcluir;
+        setModalSenhaAberto(false);
+
+        if (acao === 'excluir' && idExcluir) {
+          await db.collection('estoque_eed').doc(idExcluir).delete();
+          dispararNotificacao('Material excluído!');
+        } else if (acao === 'excluir_solicitacao' && idExcluir) {
+          await db.collection('solicitacoes_eed').doc(idExcluir).delete();
+          dispararNotificacao('Solicitação excluída!');
+        } else if (acao === 'extrair') {
+          executarExtracaoExcel();
+        } else if (acao === 'inserir' && inputArquivoExcelRef.current) {
+          inputArquivoExcelRef.current.click();
+        }
       };
 
       const executarExtracaoExcel = () => {
-        if (materiaisFiltrados.length === 0) {
-          dispararNotificacao('Sem dados para exportar.', 'erro');
-          return;
-        }
-        const dadosFormatados = materiaisFiltrados.map((item) => ({
+        if (materiaisFiltrados.length === 0) return dispararNotificacao('Sem dados para exportar.', 'erro');
+        const dadosFormatados = materiaisFiltrados.map(item => ({
           'Empreiteira': item.empreiteira,
           'Código Material': item.codigoMaterial,
           'Descrição Simplificada': item.descSimplificada,
@@ -373,10 +497,7 @@
       };
 
       const exportarSolicitacoesExcel = () => {
-        if (solicitacoes.length === 0) {
-          dispararNotificacao('Nenhuma solicitação para exportar.', 'erro');
-          return;
-        }
+        if (solicitacoes.length === 0) return dispararNotificacao('Sem solicitações.', 'erro');
         const dados = [];
         solicitacoes.forEach(sol => {
           sol.materiais.forEach(m => {
@@ -402,112 +523,22 @@
         const pasta = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(pasta, folha, "Solicitacoes");
         XLSX.writeFile(pasta, `solicitacoes_eed_${new Date().toISOString().split('T')[0]}.xlsx`);
-        dispararNotificacao('Solicitações exportadas com sucesso!');
-      };
-
-      const processarArquivoExcel = (e) => {
-        const arquivo = e.target.files[0];
-        if (!arquivo) return;
-        const leitor = new FileReader();
-        leitor.onload = (evento) => {
-          try {
-            const bin = evento.target.result;
-            const pasta = XLSX.read(bin, { type: 'binary' });
-            const aba = pasta.Sheets[pasta.SheetNames[0]];
-            const linhas = XLSX.utils.sheet_to_json(aba);
-            if (!linhas || linhas.length === 0) {
-              dispararNotificacao('A planilha está vazia.', 'erro');
-              return;
-            }
-            const carimbo = gerarCarimboAuditoria(usuarioLogado);
-            const mapaUnico = new Map();
-
-            linhas.forEach((linha, index) => {
-              const codigo = String(linha['Código Material'] || linha['Código do Material'] || `69000${index + 1}`).trim();
-              const empreiteira = String(linha['Empreiteira'] || 'Geral').trim();
-              const codDeposito = String(linha['Cod Depósito'] || '0001').trim();
-              const chaveUnica = `${codigo.toLowerCase()}_${empreiteira.toLowerCase()}_${codDeposito.toLowerCase()}`;
-
-              if (!mapaUnico.has(chaveUnica)) {
-                mapaUnico.set(chaveUnica, {
-                  id: Math.random().toString(36).substring(2, 9),
-                  empreiteira: empreiteira,
-                  codigoMaterial: codigo,
-                  descSimplificada: String(linha['Descrição Simplificada'] || linha['Desc Material'] || 'Item sem descrição').trim(),
-                  saldoFisico: Number(linha['Saldo Físico'] || linha['Quantidade'] || 0),
-                  codDeposito: codDeposito,
-                  supervisao: String(linha['Supervisão'] || '').trim(),
-                  tipoDeposito: String(linha['Tipo Depósito'] || 'Almoxarifado').trim(),
-                  marcaEquipamento: String(linha['Marca'] || '').trim(),
-                  observacao: String(linha['Observação'] || '').trim(),
-                  ultimaAlteracao: carimbo
-                });
-              }
-            });
-
-            const novos = Array.from(mapaUnico.values());
-            setMateriais(novos);
-            dispararNotificacao(`Base importada com ${novos.length} itens únicos (duplicidades filtradas)!`);
-          } catch (err) {
-            dispararNotificacao('Erro ao processar arquivo.', 'erro');
-          } finally {
-            e.target.value = '';
-          }
-        };
-        leitor.readAsBinaryString(arquivo);
-      };
-
-      const solicitarSenhaParaAcao = (tipoAcao, idItem = null) => {
-        setAcaoProtegida(tipoAcao);
-        setIdItemParaExcluir(idItem);
-        setSenhaDigitada('');
-        setExibirErroSenha(false);
-        setModalSenhaAberto(true);
-      };
-
-      const validarSenhaEExecutar = async (e) => {
-        e.preventDefault();
-        const hashDigitado = await calcularHashSHA256(senhaDigitada);
-        
-        if (hashDigitado !== HASH_SENHA_MESTRE) {
-          setExibirErroSenha(true);
-          return;
-        }
-        
-        const acao = acaoProtegida;
-        const idExcluir = idItemParaExcluir;
-        setModalSenhaAberto(false);
-        setSenhaDigitada('');
-        setExibirErroSenha(false);
-        setAcaoProtegida(null);
-        setIdItemParaExcluir(null);
-
-        if (acao === 'excluir' && idExcluir) {
-          setMateriais(prev => prev.filter(item => item.id !== idExcluir));
-          dispararNotificacao('Material excluído do estoque!');
-        } else if (acao === 'excluir_solicitacao' && idExcluir) {
-          setSolicitacoes(prev => prev.filter(sol => sol.id !== idExcluir));
-          dispararNotificacao('Solicitação excluída com sucesso!');
-        } else if (acao === 'extrair') {
-          executarExtracaoExcel();
-        } else if (acao === 'inserir' && inputArquivoExcelRef.current) {
-          inputArquivoExcelRef.current.click();
-        }
+        dispararNotificacao('Exportado com sucesso!');
       };
 
       const materiaisFiltrados = useMemo(() => {
         return materiais.filter((item) => {
-          const atendeEmpreiteira = (item.empreiteira || '').toLowerCase().includes(filtroEmpreiteira.toLowerCase());
-          const atendeCodigoMaterial = (item.codigoMaterial || '').toLowerCase().includes(filtroCodigoMaterial.toLowerCase());
-          const atendeDescSimplificada = (item.descSimplificada || '').toLowerCase().includes(filtroDescSimplificada.toLowerCase());
-          const atendeCodDeposito = (item.codDeposito || '').toLowerCase().includes(filtroCodDeposito.toLowerCase());
-          const atendeSupervisao = (item.supervisao || '').toLowerCase().includes(filtroSupervisao.toLowerCase());
+          const atendeEmp = (item.empreiteira || '').toLowerCase().includes(filtroEmpreiteira.toLowerCase());
+          const atendeCod = (item.codigoMaterial || '').toLowerCase().includes(filtroCodigoMaterial.toLowerCase());
+          const atendeDesc = (item.descSimplificada || '').toLowerCase().includes(filtroDescSimplificada.toLowerCase());
+          const atendeDep = (item.codDeposito || '').toLowerCase().includes(filtroCodDeposito.toLowerCase());
+          const atendeSup = (item.supervisao || '').toLowerCase().includes(filtroSupervisao.toLowerCase());
           let atendeSaldo = true;
           if (filtroSaldoFisicoMaiorQue !== '') {
             const v = Number(filtroSaldoFisicoMaiorQue);
             if (!isNaN(v)) atendeSaldo = item.saldoFisico > v;
           }
-          return atendeEmpreiteira && atendeCodigoMaterial && atendeDescSimplificada && atendeCodDeposito && atendeSupervisao && atendeSaldo;
+          return atendeEmp && atendeCod && atendeDesc && atendeDep && atendeSup && atendeSaldo;
         });
       }, [materiais, filtroEmpreiteira, filtroCodigoMaterial, filtroDescSimplificada, filtroSaldoFisicoMaiorQue, filtroCodDeposito, filtroSupervisao]);
 
@@ -539,65 +570,17 @@
         setModalMaterialAberto(true);
       };
 
-      const salvarMaterial = (e) => {
-        e.preventDefault();
-        const codNormalizado = campoCodigoMaterial.trim().toLowerCase();
-        const empNormalizada = campoEmpreiteira.trim().toLowerCase();
-        const depNormalizado = campoCodDeposito.trim().toLowerCase();
-
-        const jaExiste = materiais.some(item => {
-          if (materialEmEdicao && item.id === materialEmEdicao.id) return false;
-          return (
-            (item.codigoMaterial || '').toLowerCase() === codNormalizado &&
-            (item.empreiteira || '').toLowerCase() === empNormalizada &&
-            (item.codDeposito || '').toLowerCase() === depNormalizado
-          );
-        });
-
-        if (jaExiste) {
-          dispararNotificacao('Este material já está cadastrado para esta empreiteira e depósito. Edite o saldo do item existente em vez de duplicar.', 'erro');
-          return;
-        }
-
-        const carimbo = gerarCarimboAuditoria(usuarioLogado);
-        const dados = {
-          empreiteira: campoEmpreiteira.trim(),
-          codigoMaterial: campoCodigoMaterial.trim(),
-          descSimplificada: campoDescSimplificada.trim(),
-          saldoFisico: Number(campoSaldoFisico),
-          codDeposito: campoCodDeposito.trim(),
-          supervisao: campoSupervisao.trim(),
-          tipoDeposito: campoTipoDeposito.trim(),
-          marcaEquipamento: campoMarcaEquipamento.trim(),
-          observacao: campoObservacao.trim(),
-          ultimaAlteracao: carimbo
-        };
-
-        if (materialEmEdicao) {
-          setMateriais(prev => prev.map(item => item.id === materialEmEdicao.id ? { ...item, ...dados } : item));
-          dispararNotificacao('Material atualizado com sucesso!');
-        } else {
-          setMateriais(prev => [{ id: Math.random().toString(36).substring(2, 9), ...dados }, ...prev]);
-          dispararNotificacao('Material cadastrado no estoque!');
-        }
-        setModalMaterialAberto(false);
-      };
-
       const obterBadgeStatus = (status) => {
         switch (status) {
-          case 'Aprovado':
-            return 'bg-emerald-950/80 text-emerald-300 border-emerald-500/50';
-          case 'Reprovado':
-            return 'bg-rose-950/80 text-rose-300 border-rose-500/50';
-          case 'EMD gerada (Concluido)':
-            return 'bg-purple-950/80 text-purple-300 border-purple-500/50';
-          default:
-            return 'bg-[#0C5283]/60 text-blue-200 border-[#0C5283]';
+          case 'Aprovado': return 'bg-emerald-950/80 text-emerald-300 border-emerald-500/50';
+          case 'Reprovado': return 'bg-rose-950/80 text-rose-300 border-rose-500/50';
+          case 'EMD gerada (Concluido)': return 'bg-purple-950/80 text-purple-300 border-purple-500/50';
+          default: return 'bg-[#0C5283]/60 text-blue-200 border-[#0C5283]';
         }
       };
 
       // =======================================================================
-      // TELA DE BLOQUEIO INICIAL
+      // TELA DE BLOQUEIO INICIAL (TRAVA DE ACESSO)
       // =======================================================================
       if (!usuarioLogado) {
         return (
@@ -665,11 +648,10 @@
       }
 
       // =======================================================================
-      // APLICAÇÃO DESBLOQUEADA
+      // APLICAÇÃO PRINCIPAL (DESBLOQUEADA)
       // =======================================================================
       return (
         <div className="min-h-screen bg-[#07131D] text-zinc-100 flex flex-col">
-
           {notificacao && (
             <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-xl text-xs font-semibold shadow-2xl border transition-all ${
               notificacao.tipo === 'sucesso' ? 'bg-emerald-950/90 border-emerald-500 text-emerald-300' : 'bg-rose-950/90 border-rose-500 text-rose-300'
@@ -678,93 +660,61 @@
             </div>
           )}
 
-          {/* HEADER / BARRA DE STATUS */}
+          {/* HEADER */}
           <header className="border-b border-[#0C5283]/40 bg-[#07131D]/90 px-4 sm:px-8 py-3.5 flex items-center justify-between sticky top-0 z-30 backdrop-blur-md">
-            <div className="flex items-center gap-3">
+            <button type="button" onClick={() => setTelaAtual('capa')} className="font-extrabold text-white text-sm tracking-wide">
+              Controle e solicitação de EED
+            </button>
+            <div className="flex items-center gap-3 text-xs">
+              <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+              <span className="text-zinc-300 hidden md:inline">{usuarioLogado}</span>
               <button
                 type="button"
-                onClick={() => setTelaAtual('capa')}
-                className="flex items-center gap-2 hover:opacity-90 transition text-left"
+                onClick={encerrarSessao}
+                className="px-2.5 py-1 rounded-lg bg-rose-950/50 hover:bg-rose-900 border border-rose-800/50 text-rose-300 text-xs font-medium transition"
               >
-                <span className="font-extrabold text-white text-sm tracking-wide">
-                  Controle e solicitação de EED
-                </span>
+                Sair
               </button>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 text-xs">
-                <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                <span className="text-zinc-300 hidden md:inline">{usuarioLogado}</span>
-                <button
-                  type="button"
-                  onClick={encerrarSessao}
-                  className="px-2.5 py-1 rounded-lg bg-rose-950/50 hover:bg-rose-900 border border-rose-800/50 text-rose-300 text-xs font-medium transition"
-                >
-                  Sair
-                </button>
-              </div>
             </div>
           </header>
 
-          {/* VISTA 1: CAPA PRINCIPAL */}
+          {/* VISTA 1: CAPA */}
           {telaAtual === 'capa' && (
             <main className="flex-1 flex flex-col items-center justify-center p-6 sm:p-10 max-w-5xl mx-auto w-full space-y-8">
-              
-              <div className="w-full relative rounded-3xl overflow-hidden shadow-2xl border border-[#0C5283]/60 bg-gradient-to-br from-[#0C5283] via-[#093d63] to-[#07131D] p-10 sm:p-14 text-center">
-                <div className="relative z-10 space-y-3 max-w-2xl mx-auto">
-                  <span className="text-[11px] font-bold tracking-widest text-[#FF7A00] uppercase bg-[#FF7A00]/15 border border-[#FF7A00]/30 px-3.5 py-1 rounded-full inline-block">
-                    Gestão Operacional
-                  </span>
-                  <h1 className="text-2xl sm:text-4xl font-extrabold text-white tracking-tight">
-                    Controle e solicitação de EED
-                  </h1>
-                </div>
+              <div className="w-full rounded-3xl overflow-hidden shadow-2xl border border-[#0C5283]/60 bg-gradient-to-br from-[#0C5283] via-[#093d63] to-[#07131D] p-10 text-center">
+                <span className="text-[11px] font-bold tracking-widest text-[#FF7A00] uppercase bg-[#FF7A00]/15 border border-[#FF7A00]/30 px-3.5 py-1 rounded-full inline-block mb-3">
+                  Gestão Operacional
+                </span>
+                <h1 className="text-2xl sm:text-4xl font-extrabold text-white">Controle e solicitação de EED</h1>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 w-full">
-                
-                {/* 1. Controle */}
-                <button
-                  type="button"
-                  onClick={() => setTelaAtual('controle')}
-                  className="group bg-[#0A1D2D] hover:bg-[#0C5283]/40 border border-[#0C5283]/70 hover:border-[#FF7A00]/70 p-8 rounded-2xl transition duration-200 text-center space-y-3 shadow-xl flex flex-col items-center justify-center active:scale-95"
-                >
+                <button type="button" onClick={() => setTelaAtual('controle')} className="bg-[#0A1D2D] hover:bg-[#0C5283]/40 border border-[#0C5283]/70 hover:border-[#FF7A00]/70 p-8 rounded-2xl transition text-center space-y-3 shadow-xl flex flex-col items-center justify-center">
                   <span className="text-4xl">📦</span>
-                  <h2 className="text-lg font-bold text-white group-hover:text-[#FF7A00] transition">Controle</h2>
+                  <h2 className="text-lg font-bold text-white">Controle</h2>
                 </button>
 
-                {/* 2. Solicitação */}
-                <button
-                  type="button"
-                  onClick={() => setTelaAtual('solicitacao')}
-                  className="group bg-[#0A1D2D] hover:bg-[#0C5283]/40 border border-[#0C5283]/70 hover:border-[#FF7A00]/70 p-8 rounded-2xl transition duration-200 text-center space-y-3 shadow-xl flex flex-col items-center justify-center active:scale-95"
-                >
+                <button type="button" onClick={() => setTelaAtual('solicitacao')} className="bg-[#0A1D2D] hover:bg-[#0C5283]/40 border border-[#0C5283]/70 hover:border-[#FF7A00]/70 p-8 rounded-2xl transition text-center space-y-3 shadow-xl flex flex-col items-center justify-center">
                   <span className="text-4xl">📋</span>
-                  <h2 className="text-lg font-bold text-white group-hover:text-[#FF7A00] transition">Solicitação</h2>
+                  <h2 className="text-lg font-bold text-white">Solicitação</h2>
                 </button>
 
-                {/* 3. Gerenciar Acesso */}
                 <button
                   type="button"
                   onClick={() => {
-                    if (!ehAdministrador) {
-                      dispararNotificacao('Acesso restrito ao administrador master.', 'erro');
-                      return;
-                    }
+                    if (!ehAdministrador) return dispararNotificacao('Acesso restrito ao administrador.', 'erro');
                     setTelaAtual('gerenciar');
                   }}
-                  className="group bg-[#0A1D2D] hover:bg-[#0C5283]/40 border border-[#0C5283]/70 hover:border-[#FF7A00]/70 p-8 rounded-2xl transition duration-200 text-center space-y-3 shadow-xl flex flex-col items-center justify-center active:scale-95 relative"
+                  className="bg-[#0A1D2D] hover:bg-[#0C5283]/40 border border-[#0C5283]/70 hover:border-[#FF7A00]/70 p-8 rounded-2xl transition text-center space-y-3 shadow-xl flex flex-col items-center justify-center relative"
                 >
                   <span className="text-4xl">🔒</span>
-                  <h2 className="text-lg font-bold text-white group-hover:text-[#FF7A00] transition">Gerenciar Acesso</h2>
+                  <h2 className="text-lg font-bold text-white">Gerenciar Acesso</h2>
                   {ehAdministrador && solicitacoesAcesso.length > 0 && (
                     <span className="absolute top-4 right-4 bg-[#FF7A00] text-white text-[10px] font-bold px-2 py-0.5 rounded-full animate-bounce">
                       {solicitacoesAcesso.length} pendente(s)
                     </span>
                   )}
                 </button>
-
               </div>
             </main>
           )}
@@ -772,42 +722,16 @@
           {/* VISTA 2: CONTROLE (ESTOQUE) */}
           {telaAtual === 'controle' && (
             <main className="flex-1 p-4 sm:p-8 max-w-7xl mx-auto w-full space-y-6">
-              
               <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#0C5283]/40 pb-4">
                 <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setTelaAtual('capa')}
-                    className="p-2 rounded-xl bg-[#0C5283]/40 hover:bg-[#0C5283] text-zinc-200 transition text-xs"
-                  >
-                    ← Voltar
-                  </button>
-                  <h2 className="text-lg font-bold text-white">Controle de Estoque</h2>
+                  <button type="button" onClick={() => setTelaAtual('capa')} className="p-2 rounded-xl bg-[#0C5283]/40 hover:bg-[#0C5283] text-zinc-200 text-xs">← Voltar</button>
+                  <h2 className="text-lg font-bold text-white">Controle de Estoque (Nuvem)</h2>
                 </div>
-
                 <div className="flex items-center gap-2 flex-wrap">
                   <input type="file" ref={inputArquivoExcelRef} onChange={processarArquivoExcel} accept=".xlsx, .xls, .csv" className="hidden" />
-                  <button
-                    type="button"
-                    onClick={abrirModalAdicionar}
-                    className="px-3.5 py-2 rounded-xl bg-[#FF7A00] hover:bg-[#EA580C] text-white font-bold text-xs transition shadow-md shadow-orange-500/20"
-                  >
-                    + Adicionar Item
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => solicitarSenhaParaAcao('inserir')}
-                    className="px-3 py-2 rounded-xl bg-emerald-800/80 hover:bg-emerald-700 text-white font-semibold text-xs transition border border-emerald-500/40"
-                  >
-                    ↑ Inserir Base
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => solicitarSenhaParaAcao('extrair')}
-                    className="px-3 py-2 rounded-xl bg-[#0C5283] hover:bg-[#0C5283]/80 text-white font-semibold text-xs transition border border-[#0C5283]"
-                  >
-                    ↓ Extrair Base
-                  </button>
+                  <button type="button" onClick={abrirModalAdicionar} className="px-3.5 py-2 rounded-xl bg-[#FF7A00] hover:bg-[#EA580C] text-white font-bold text-xs">+ Adicionar Item</button>
+                  <button type="button" onClick={() => solicitarSenhaParaAcao('inserir')} className="px-3 py-2 rounded-xl bg-emerald-800/80 hover:bg-emerald-700 text-white font-semibold text-xs border border-emerald-500/40">↑ Inserir Base</button>
+                  <button type="button" onClick={() => solicitarSenhaParaAcao('extrair')} className="px-3 py-2 rounded-xl bg-[#0C5283] hover:bg-[#0C5283]/80 text-white font-semibold text-xs border border-[#0C5283]">↓ Extrair Base</button>
                 </div>
               </div>
 
@@ -815,47 +739,23 @@
               <div className="bg-[#0A1D2D] border border-[#0C5283]/50 rounded-2xl p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
                 <div>
                   <label className="text-zinc-400 block mb-1">Empreiteira</label>
-                  <input
-                    type="text"
-                    value={filtroEmpreiteira}
-                    onChange={(e) => setFiltroEmpreiteira(e.target.value)}
-                    placeholder="Buscar..."
-                    className="w-full h-8 px-3 rounded-lg bg-[#07131D] border border-[#0C5283] text-white focus:outline-none focus:border-[#FF7A00]"
-                  />
+                  <input type="text" value={filtroEmpreiteira} onChange={(e) => setFiltroEmpreiteira(e.target.value)} placeholder="Buscar..." className="w-full h-8 px-3 rounded-lg bg-[#07131D] border border-[#0C5283] text-white" />
                 </div>
                 <div>
                   <label className="text-zinc-400 block mb-1">Código Material</label>
-                  <input
-                    type="text"
-                    value={filtroCodigoMaterial}
-                    onChange={(e) => setFiltroCodigoMaterial(e.target.value)}
-                    placeholder="Buscar..."
-                    className="w-full h-8 px-3 rounded-lg bg-[#07131D] border border-[#0C5283] text-white focus:outline-none focus:border-[#FF7A00]"
-                  />
+                  <input type="text" value={filtroCodigoMaterial} onChange={(e) => setFiltroCodigoMaterial(e.target.value)} placeholder="Buscar..." className="w-full h-8 px-3 rounded-lg bg-[#07131D] border border-[#0C5283] text-white" />
                 </div>
                 <div>
                   <label className="text-zinc-400 block mb-1">Descrição</label>
-                  <input
-                    type="text"
-                    value={filtroDescSimplificada}
-                    onChange={(e) => setFiltroDescSimplificada(e.target.value)}
-                    placeholder="Buscar..."
-                    className="w-full h-8 px-3 rounded-lg bg-[#07131D] border border-[#0C5283] text-white focus:outline-none focus:border-[#FF7A00]"
-                  />
+                  <input type="text" value={filtroDescSimplificada} onChange={(e) => setFiltroDescSimplificada(e.target.value)} placeholder="Buscar..." className="w-full h-8 px-3 rounded-lg bg-[#07131D] border border-[#0C5283] text-white" />
                 </div>
                 <div>
                   <label className="text-zinc-400 block mb-1">Saldo Físico &gt;</label>
-                  <input
-                    type="number"
-                    value={filtroSaldoFisicoMaiorQue}
-                    onChange={(e) => setFiltroSaldoFisicoMaiorQue(e.target.value)}
-                    placeholder="0"
-                    className="w-full h-8 px-3 rounded-lg bg-[#07131D] border border-[#0C5283] text-white focus:outline-none focus:border-[#FF7A00]"
-                  />
+                  <input type="number" value={filtroSaldoFisicoMaiorQue} onChange={(e) => setFiltroSaldoFisicoMaiorQue(e.target.value)} placeholder="0" className="w-full h-8 px-3 rounded-lg bg-[#07131D] border border-[#0C5283] text-white" />
                 </div>
               </div>
 
-              {/* Tabela de Estoque */}
+              {/* Tabela */}
               <div className="bg-[#0A1D2D] border border-[#0C5283]/40 rounded-2xl overflow-hidden shadow-xl">
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs text-zinc-200">
@@ -874,45 +774,21 @@
                     </thead>
                     <tbody className="divide-y divide-[#0C5283]/20">
                       {materiaisFiltrados.length === 0 ? (
-                        <tr>
-                          <td colSpan="9" className="py-8 text-center text-zinc-400 italic">
-                            Nenhum material encontrado.
-                          </td>
-                        </tr>
+                        <tr><td colSpan="9" className="py-8 text-center text-zinc-400 italic">Nenhum material cadastrado.</td></tr>
                       ) : (
                         materiaisFiltrados.map((item) => (
                           <tr key={item.id} className="hover:bg-[#0C5283]/20 transition-colors">
-                            <td className="py-3 px-3 font-medium text-zinc-300">{item.empreiteira}</td>
-                            <td className="py-3 px-3">
-                              <span className="px-2 py-0.5 rounded bg-[#07131D] text-[#FF7A00] font-mono border border-[#0C5283]">
-                                {item.codigoMaterial}
-                              </span>
-                            </td>
+                            <td className="py-3 px-3">{item.empreiteira}</td>
+                            <td className="py-3 px-3"><span className="px-2 py-0.5 rounded bg-[#07131D] text-[#FF7A00] font-mono border border-[#0C5283]">{item.codigoMaterial}</span></td>
                             <td className="py-3 px-3 font-semibold text-white">{item.descSimplificada}</td>
                             <td className="py-3 px-3 text-center font-bold text-[#FF7A00]">{item.saldoFisico}</td>
                             <td className="py-3 px-3 font-mono">{item.codDeposito || '—'}</td>
                             <td className="py-3 px-3">{item.supervisao || '—'}</td>
                             <td className="py-3 px-3">{item.marcaEquipamento || '—'}</td>
-                            <td className="py-3 px-3">
-                              <span className="text-[11px] text-amber-300/90 font-mono bg-[#07131D] px-2 py-0.5 rounded border border-[#0C5283]/40">
-                                {item.ultimaAlteracao || '—'}
-                              </span>
-                            </td>
-                            <td className="py-3 px-3 text-right space-x-1 whitespace-nowrap">
-                              <button
-                                type="button"
-                                onClick={() => abrirModalEditar(item)}
-                                className="px-2 py-1 rounded bg-[#0C5283]/40 hover:bg-[#0C5283] text-zinc-200 transition text-xs"
-                              >
-                                Editar
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => solicitarSenhaParaAcao('excluir', item.id)}
-                                className="px-2 py-1 rounded bg-rose-950/40 hover:bg-rose-900 border border-rose-800 text-rose-300 transition text-xs"
-                              >
-                                Excluir
-                              </button>
+                            <td className="py-3 px-3"><span className="text-[11px] text-amber-300/90 font-mono bg-[#07131D] px-2 py-0.5 rounded border border-[#0C5283]/40">{item.ultimaAlteracao || '—'}</span></td>
+                            <td className="py-3 px-3 text-right space-x-1">
+                              <button type="button" onClick={() => abrirModalEditar(item)} className="px-2 py-1 rounded bg-[#0C5283]/40 hover:bg-[#0C5283] text-zinc-200 text-xs">Editar</button>
+                              <button type="button" onClick={() => solicitarSenhaParaAcao('excluir', item.id)} className="px-2 py-1 rounded bg-rose-950/40 hover:bg-rose-900 border border-rose-800 text-rose-300 text-xs">Excluir</button>
                             </td>
                           </tr>
                         ))
@@ -921,43 +797,21 @@
                   </table>
                 </div>
               </div>
-
             </main>
           )}
 
           {/* VISTA 3: SOLICITAÇÕES */}
           {telaAtual === 'solicitacao' && (
             <main className="flex-1 p-4 sm:p-8 max-w-7xl mx-auto w-full space-y-6">
-              
               <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#0C5283]/40 pb-4">
                 <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setTelaAtual('capa')}
-                    className="p-2 rounded-xl bg-[#0C5283]/40 hover:bg-[#0C5283] text-zinc-200 transition text-xs"
-                  >
-                    ← Voltar
-                  </button>
+                  <button type="button" onClick={() => setTelaAtual('capa')} className="p-2 rounded-xl bg-[#0C5283]/40 hover:bg-[#0C5283] text-zinc-200 text-xs">← Voltar</button>
                   <h2 className="text-lg font-bold text-white">Solicitações de Material</h2>
                 </div>
-
                 <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={abrirModalNovaSolicitacao}
-                    className="px-4 py-2 rounded-xl bg-[#FF7A00] hover:bg-[#EA580C] text-white font-bold text-xs transition shadow-md shadow-orange-500/25 flex items-center gap-1.5"
-                  >
-                    <span>+</span>
-                    <span>Nova Solicitação</span>
-                  </button>
+                  <button type="button" onClick={abrirModalNovaSolicitacao} className="px-4 py-2 rounded-xl bg-[#FF7A00] hover:bg-[#EA580C] text-white font-bold text-xs">+ Nova Solicitação</button>
                   {solicitacoes.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={exportarSolicitacoesExcel}
-                      className="px-3 py-2 rounded-xl bg-[#0C5283] hover:bg-[#0C5283]/80 text-white font-semibold text-xs transition border border-[#0C5283]"
-                    >
-                      Exportar (.xlsx)
-                    </button>
+                    <button type="button" onClick={exportarSolicitacoesExcel} className="px-3 py-2 rounded-xl bg-[#0C5283] hover:bg-[#0C5283]/80 text-white font-semibold text-xs border border-[#0C5283]">Exportar (.xlsx)</button>
                   )}
                 </div>
               </div>
@@ -966,128 +820,70 @@
                 <div className="bg-[#0A1D2D] border border-[#0C5283]/40 rounded-2xl p-12 text-center space-y-3">
                   <span className="text-3xl">📋</span>
                   <h3 className="text-sm font-bold text-white">Nenhuma solicitação registrada</h3>
-                  <p className="text-xs text-zinc-400 max-w-sm mx-auto">
-                    Clique no botão acima para registrar a primeira solicitação de EED.
-                  </p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {solicitacoes.map((sol) => (
-                    <div key={sol.id} className="bg-[#0A1D2D] border border-[#0C5283] rounded-2xl p-4 space-y-3.5 shadow-lg text-xs flex flex-col justify-between relative group">
+                    <div key={sol.id} className="bg-[#0A1D2D] border border-[#0C5283] rounded-2xl p-4 space-y-3.5 shadow-lg text-xs flex flex-col justify-between">
                       <div className="space-y-2.5">
-                        
                         <div className="flex justify-between items-start border-b border-[#0C5283]/40 pb-2">
                           <div>
                             <span className="font-bold text-white text-sm">{sol.nomeEmpreiteira}</span>
-                            <p className="text-[11px] text-zinc-400 mt-0.5">
-                              Obra: <strong className="text-zinc-200">{sol.obra}</strong> | SIGCO: <strong className="text-[#FF7A00]">{sol.sigco}</strong>
-                            </p>
-                            {(sol.supervisao || sol.localidade) && (
-                              <p className="text-[10px] text-blue-300 mt-0.5">
-                                Supervisão: <strong>{sol.supervisao || '—'}</strong> | Local: <strong>{sol.localidade || '—'}</strong>
-                              </p>
-                            )}
+                            <p className="text-[11px] text-zinc-400 mt-0.5">Obra: <strong className="text-zinc-200">{sol.obra}</strong> | SIGCO: <strong className="text-[#FF7A00]">{sol.sigco}</strong></p>
                           </div>
-                          
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] bg-[#0C5283]/60 text-blue-200 px-2 py-0.5 rounded font-mono">
-                              {sol.dataProgramacao || 'S/ Data'}
-                            </span>
-                            
-                            <button
-                              type="button"
-                              onClick={() => solicitarSenhaParaAcao('excluir_solicitacao', sol.id)}
-                              className="p-1 px-1.5 rounded bg-rose-950/40 hover:bg-rose-900 border border-rose-800 text-rose-300 transition text-[11px] flex items-center gap-1 active:scale-95"
-                              title="Excluir esta solicitação (Requer senha)"
-                            >
-                              <span>🗑️</span>
-                              <span>Excluir</span>
-                            </button>
-                          </div>
+                          <button type="button" onClick={() => solicitarSenhaParaAcao('excluir_solicitacao', sol.id)} className="p-1 px-1.5 rounded bg-rose-950/40 hover:bg-rose-900 border border-rose-800 text-rose-300 text-[11px]">🗑️ Excluir</button>
                         </div>
-
-                        {/* Itens */}
                         <div className="space-y-1">
                           <span className="text-[10px] uppercase font-bold text-zinc-400">EED SOLICITADO:</span>
-                          <div className="space-y-1">
-                            {sol.materiais.map((item, idx) => (
-                              <div key={idx} className="flex justify-between items-center bg-[#07131D] p-2 rounded-lg border border-[#0C5283]/30">
-                                <span className="text-zinc-200 font-medium truncate">{item.material}</span>
-                                <span className="text-[#FF7A00] font-bold ml-2">Qtd: {item.quantidade}</span>
-                              </div>
-                            ))}
-                          </div>
+                          {sol.materiais.map((item, idx) => (
+                            <div key={idx} className="flex justify-between items-center bg-[#07131D] p-2 rounded-lg border border-[#0C5283]/30">
+                              <span className="text-zinc-200 truncate">{item.material}</span>
+                              <span className="text-[#FF7A00] font-bold ml-2">Qtd: {item.quantidade}</span>
+                            </div>
+                          ))}
                         </div>
-
-                        {sol.observacao && (
-                          <div className="bg-[#07131D]/90 p-2.5 rounded-lg border border-[#0C5283]/20">
-                            <p className="text-[11px] text-zinc-400 italic">"{sol.observacao}"</p>
-                          </div>
-                        )}
+                        {sol.observacao && <p className="text-[11px] text-zinc-400 italic bg-[#07131D]/90 p-2 rounded-lg">"{sol.observacao}"</p>}
                       </div>
 
-                      {/* Status e Auditoria */}
-                      <div className="pt-2 border-t border-[#0C5283]/40 space-y-2.5">
-                        <div>
-                          <label className="text-[10px] font-bold text-zinc-400 uppercase block mb-1">Status da Solicitação:</label>
-                          <select
-                            value={sol.status || 'Solicitado'}
-                            onChange={(e) => atualizarStatusSolicitacao(sol.id, e.target.value)}
-                            className={`w-full h-8 px-2.5 rounded-lg border text-xs font-semibold focus:outline-none transition cursor-pointer ${obterBadgeStatus(sol.status || 'Solicitado')}`}
-                          >
-                            <option value="Solicitado" className="bg-[#0A1D2D] text-white">Solicitado</option>
-                            <option value="Aprovado" className="bg-[#0A1D2D] text-emerald-300">Aprovado</option>
-                            <option value="Reprovado" className="bg-[#0A1D2D] text-rose-300">Reprovado</option>
-                            <option value="EMD gerada (Concluido)" className="bg-[#0A1D2D] text-purple-300">EMD gerada (Concluído)</option>
-                          </select>
-                        </div>
+                      <div className="pt-2 border-t border-[#0C5283]/40 space-y-2">
+                        <select
+                          value={sol.status || 'Solicitado'}
+                          onChange={(e) => atualizarStatusSolicitacao(sol.id, e.target.value)}
+                          className={`w-full h-8 px-2.5 rounded-lg border text-xs font-semibold ${obterBadgeStatus(sol.status || 'Solicitado')}`}
+                        >
+                          <option value="Solicitado" className="bg-[#0A1D2D] text-white">Solicitado</option>
+                          <option value="Aprovado" className="bg-[#0A1D2D] text-emerald-300">Aprovado</option>
+                          <option value="Reprovado" className="bg-[#0A1D2D] text-rose-300">Reprovado</option>
+                          <option value="EMD gerada (Concluido)" className="bg-[#0A1D2D] text-purple-300">EMD gerada (Concluído)</option>
+                        </select>
 
                         {sol.status === 'EMD gerada (Concluido)' && (
-                          <div className="bg-[#07131D] p-2.5 rounded-xl border border-purple-500/40 space-y-1">
-                            <label className="text-[10px] font-bold text-purple-300 uppercase block">Código da EMD *</label>
-                            <input
-                              type="text"
-                              value={sol.codigoEMD || ''}
-                              onChange={(e) => atualizarCodigoEMD(sol.id, e.target.value)}
-                              placeholder="Digite o número da EMD..."
-                              className="w-full h-7 px-2.5 rounded-lg bg-[#0A1D2D] border border-purple-500/50 text-white font-mono text-xs focus:outline-none focus:border-purple-400"
-                            />
-                          </div>
+                          <input
+                            type="text"
+                            value={sol.codigoEMD || ''}
+                            onChange={(e) => atualizarCodigoEMD(sol.id, e.target.value)}
+                            placeholder="Número da EMD..."
+                            className="w-full h-7 px-2.5 rounded-lg bg-[#0A1D2D] border border-purple-500/50 text-white text-xs"
+                          />
                         )}
-
-                        <div className="text-[10px] text-zinc-400 pt-1 border-t border-[#0C5283]/20 space-y-0.5">
-                          <div className="flex justify-between">
-                            <span>Criado: {sol.dataRegistro}</span>
-                            <span className="truncate max-w-[120px]" title={sol.solicitante}>{sol.solicitante ? sol.solicitante.split('@')[0] : '—'}</span>
-                          </div>
-                          <div className="flex justify-between items-center text-amber-300/90 font-mono">
-                            <span>Última alteração:</span>
-                            <span className="font-semibold">{sol.ultimaAlteracao || '—'}</span>
-                          </div>
+                        <div className="text-[10px] text-zinc-400 flex justify-between">
+                          <span>Solicitante: {sol.solicitante ? sol.solicitante.split('@')[0] : '—'}</span>
+                          <span className="text-amber-300/90">{sol.ultimaAlteracao || '—'}</span>
                         </div>
                       </div>
-
                     </div>
                   ))}
                 </div>
               )}
-
             </main>
           )}
 
           {/* VISTA 4: GERENCIAR ACESSO */}
           {telaAtual === 'gerenciar' && ehAdministrador && (
             <main className="flex-1 p-4 sm:p-8 max-w-3xl mx-auto w-full space-y-6">
-              
               <div className="flex items-center gap-3 border-b border-[#0C5283]/40 pb-4">
-                <button
-                  type="button"
-                  onClick={() => setTelaAtual('capa')}
-                  className="p-2 rounded-xl bg-[#0C5283]/40 hover:bg-[#0C5283] text-zinc-200 transition text-xs"
-                >
-                  ← Voltar
-                </button>
-                <h2 className="text-lg font-bold text-white">Gerenciar e Liberar Acesso</h2>
+                <button type="button" onClick={() => setTelaAtual('capa')} className="p-2 rounded-xl bg-[#0C5283]/40 hover:bg-[#0C5283] text-zinc-200 text-xs">← Voltar</button>
+                <h2 className="text-lg font-bold text-white">Gerenciar e Liberar Acesso (Nuvem)</h2>
               </div>
 
               {/* Solicitações Pendentes */}
@@ -1103,29 +899,15 @@
                 </div>
 
                 {solicitacoesAcesso.length === 0 ? (
-                  <p className="text-xs text-zinc-400 italic py-2">
-                    Nenhuma solicitação de acesso pendente no momento.
-                  </p>
+                  <p className="text-xs text-zinc-400 italic py-2">Nenhuma solicitação pendente no momento.</p>
                 ) : (
                   <div className="space-y-2 pt-1">
                     {solicitacoesAcesso.map((emailPend) => (
                       <div key={emailPend} className="flex items-center justify-between p-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-xs">
                         <span className="font-medium text-white">{emailPend}</span>
                         <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => aprovarSolicitacao(emailPend)}
-                            className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition"
-                          >
-                            Aprovar
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => rejeitarSolicitacao(emailPend)}
-                            className="px-3 py-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900 text-rose-300 border border-rose-800 text-xs font-semibold transition"
-                          >
-                            Recusar
-                          </button>
+                          <button type="button" onClick={() => aprovarSolicitacao(emailPend)} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs">Aprovar</button>
+                          <button type="button" onClick={() => rejeitarSolicitacao(emailPend)} className="px-3 py-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900 text-rose-300 border border-rose-800 text-xs">Recusar</button>
                         </div>
                       </div>
                     ))}
@@ -1135,7 +917,7 @@
 
               {/* Liberar Manual */}
               <form onSubmit={liberarNovoAcessoManual} className="space-y-3 bg-[#0A1D2D] p-5 rounded-2xl border border-[#0C5283]">
-                <label className="text-xs font-bold text-white block">Liberar Novo Acesso Manualmente (E-mail):</label>
+                <label className="text-xs font-bold text-white block">Liberar Novo Acesso Manualmente:</label>
                 <div className="flex gap-2">
                   <input
                     type="email"
@@ -1143,14 +925,9 @@
                     value={novoEmailAcesso}
                     onChange={(e) => setNovoEmailAcesso(e.target.value)}
                     placeholder="usuario@energisa.com.br"
-                    className="flex-1 h-10 px-3.5 rounded-xl bg-[#07131D] border border-[#0C5283] text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#FF7A00]"
+                    className="flex-1 h-10 px-3.5 rounded-xl bg-[#07131D] border border-[#0C5283] text-xs text-white"
                   />
-                  <button
-                    type="submit"
-                    className="px-5 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-xs transition"
-                  >
-                    Liberar
-                  </button>
+                  <button type="submit" className="px-5 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-xs">Liberar</button>
                 </div>
               </form>
 
@@ -1162,13 +939,7 @@
                     <div key={user} className="flex items-center justify-between p-3 rounded-xl bg-[#07131D] border border-[#0C5283]/50 text-xs">
                       <span className="font-medium text-zinc-200">{user}</span>
                       {user.toLowerCase() !== ADMIN_SISTEMA.toLowerCase() ? (
-                        <button
-                          type="button"
-                          onClick={() => revogarAcesso(user)}
-                          className="px-3 py-1 rounded-lg bg-rose-950/60 hover:bg-rose-900 text-rose-300 border border-rose-800 text-xs font-semibold transition"
-                        >
-                          Revogar
-                        </button>
+                        <button type="button" onClick={() => revogarAcesso(user)} className="px-3 py-1 rounded-lg bg-rose-950/60 hover:bg-rose-900 text-rose-300 border border-rose-800 text-xs">Revogar</button>
                       ) : (
                         <span className="text-[10px] text-zinc-500 uppercase font-semibold">Master</span>
                       )}
@@ -1176,139 +947,56 @@
                   ))}
                 </div>
               </div>
-
             </main>
           )}
 
-          {/* MODAL: FORMULÁRIO DE SOLICITAÇÃO */}
+          {/* MODAL: NOVA SOLICITAÇÃO */}
           {modalSolicitacaoAberto && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm">
               <div className="bg-[#0A1D2D] border border-[#0C5283] rounded-2xl p-6 max-w-2xl w-full shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
                 <div className="flex items-center justify-between border-b border-[#0C5283]/40 pb-3">
-                  <h3 className="font-bold text-base text-white flex items-center gap-2">
-                    <span>📋 Solicitação de Material</span>
-                  </h3>
-                  <button type="button" onClick={() => setModalSolicitacaoAberto(false)} className="text-zinc-400 hover:text-white text-sm">✕</button>
+                  <h3 className="font-bold text-base text-white">📋 Solicitação de Material</h3>
+                  <button type="button" onClick={() => setModalSolicitacaoAberto(false)} className="text-zinc-400 hover:text-white">✕</button>
                 </div>
-
                 <form onSubmit={salvarSolicitacao} className="space-y-4 text-xs">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block font-semibold text-zinc-300 mb-1">Obra *</label>
-                      <input
-                        type="text"
-                        required
-                        value={solicitacaoObra}
-                        onChange={(e) => setSolicitacaoObra(e.target.value)}
-                        placeholder="Número da Obra"
-                        className="w-full h-10 px-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white focus:outline-none focus:border-[#FF7A00]"
-                      />
+                      <input type="text" required value={solicitacaoObra} onChange={(e) => setSolicitacaoObra(e.target.value)} className="w-full h-10 px-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white" />
                     </div>
-
                     <div>
                       <label className="block font-semibold text-zinc-300 mb-1">Sigco *</label>
-                      <input
-                        type="text"
-                        required
-                        value={solicitacaoSigco}
-                        onChange={(e) => setSolicitacaoSigco(e.target.value)}
-                        placeholder="Número SIGCO"
-                        className="w-full h-10 px-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white focus:outline-none focus:border-[#FF7A00]"
-                      />
+                      <input type="text" required value={solicitacaoSigco} onChange={(e) => setSolicitacaoSigco(e.target.value)} className="w-full h-10 px-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white" />
                     </div>
-
                     <div>
                       <label className="block font-semibold text-zinc-300 mb-1">Supervisão *</label>
-                      <input
-                        type="text"
-                        required
-                        value={solicitacaoSupervisao}
-                        onChange={(e) => setSolicitacaoSupervisao(e.target.value)}
-                        placeholder="Ex: Campo Grande, Dourados..."
-                        className="w-full h-10 px-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white focus:outline-none focus:border-[#FF7A00]"
-                      />
+                      <input type="text" required value={solicitacaoSupervisao} onChange={(e) => setSolicitacaoSupervisao(e.target.value)} className="w-full h-10 px-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white" />
                     </div>
-
                     <div>
                       <label className="block font-semibold text-zinc-300 mb-1">Localidade *</label>
-                      <input
-                        type="text"
-                        required
-                        value={solicitacaoLocalidade}
-                        onChange={(e) => setSolicitacaoLocalidade(e.target.value)}
-                        placeholder="Campo Grande, Dourados...."
-                        className="w-full h-10 px-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white focus:outline-none focus:border-[#FF7A00]"
-                      />
+                      <input type="text" required value={solicitacaoLocalidade} onChange={(e) => setSolicitacaoLocalidade(e.target.value)} className="w-full h-10 px-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white" />
                     </div>
-
                     <div>
                       <label className="block font-semibold text-zinc-300 mb-1">Nome da Empreiteira *</label>
-                      <input
-                        type="text"
-                        required
-                        value={solicitacaoEmpreiteira}
-                        onChange={(e) => setSolicitacaoEmpreiteira(e.target.value)}
-                        placeholder="Ex: COMPEL, ENGELMIG..."
-                        className="w-full h-10 px-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white focus:outline-none focus:border-[#FF7A00]"
-                      />
+                      <input type="text" required value={solicitacaoEmpreiteira} onChange={(e) => setSolicitacaoEmpreiteira(e.target.value)} className="w-full h-10 px-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white" />
                     </div>
-
                     <div>
                       <label className="block font-semibold text-zinc-300 mb-1">Data de Programação *</label>
-                      <input
-                        type="date"
-                        required
-                        value={solicitacaoDataProgramacao}
-                        onChange={(e) => setSolicitacaoDataProgramacao(e.target.value)}
-                        className="w-full h-10 px-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white focus:outline-none focus:border-[#FF7A00]"
-                      />
+                      <input type="date" required value={solicitacaoDataProgramacao} onChange={(e) => setSolicitacaoDataProgramacao(e.target.value)} className="w-full h-10 px-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white" />
                     </div>
                   </div>
 
                   <div className="bg-[#07131D] border border-[#0C5283]/60 rounded-xl p-4 space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-white text-xs">EED Solicitado</span>
-                      <button
-                        type="button"
-                        onClick={adicionarLinhaMaterial}
-                        className="px-3 py-1.5 rounded-lg bg-[#0C5283] hover:bg-[#0C5283]/80 text-white font-bold text-xs transition flex items-center gap-1"
-                      >
-                        <span>+ Adicionar EED</span>
-                      </button>
+                      <button type="button" onClick={adicionarLinhaMaterial} className="px-3 py-1.5 rounded-lg bg-[#0C5283] text-white font-bold text-xs">+ Adicionar EED</button>
                     </div>
-
                     {listaItensSolicitacao.map((item, index) => (
                       <div key={index} className="flex items-center gap-2">
-                        <div className="flex-1">
-                          <input
-                            type="text"
-                            required
-                            value={item.material}
-                            onChange={(e) => atualizarItemMaterial(index, 'material', e.target.value)}
-                            placeholder={`EED ${index + 1} (Código ou Descrição)`}
-                            className="w-full h-9 px-3 rounded-lg bg-[#0A1D2D] border border-[#0C5283] text-white text-xs focus:outline-none focus:border-[#FF7A00]"
-                          />
-                        </div>
-                        <div className="w-24">
-                          <input
-                            type="number"
-                            min="1"
-                            required
-                            value={item.quantidade}
-                            onChange={(e) => atualizarItemMaterial(index, 'quantidade', Number(e.target.value))}
-                            placeholder="Qtd"
-                            className="w-full h-9 px-2 text-center rounded-lg bg-[#0A1D2D] border border-[#0C5283] text-white text-xs focus:outline-none focus:border-[#FF7A00]"
-                          />
-                        </div>
+                        <input type="text" required value={item.material} onChange={(e) => atualizarItemMaterial(index, 'material', e.target.value)} placeholder={`EED ${index + 1}`} className="flex-1 h-9 px-3 rounded-lg bg-[#0A1D2D] border border-[#0C5283] text-white text-xs" />
+                        <input type="number" min="1" required value={item.quantidade} onChange={(e) => atualizarItemMaterial(index, 'quantidade', Number(e.target.value))} className="w-24 h-9 px-2 text-center rounded-lg bg-[#0A1D2D] border border-[#0C5283] text-white text-xs" />
                         {listaItensSolicitacao.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => removerLinhaMaterial(index)}
-                            className="h-9 w-9 flex items-center justify-center rounded-lg bg-rose-950/60 hover:bg-rose-900 text-rose-300 border border-rose-800"
-                            title="Remover este EED"
-                          >
-                            ✕
-                          </button>
+                          <button type="button" onClick={() => removerLinhaMaterial(index)} className="h-9 w-9 rounded-lg bg-rose-950/60 text-rose-300 border border-rose-800">✕</button>
                         )}
                       </div>
                     ))}
@@ -1316,182 +1004,79 @@
 
                   <div>
                     <label className="block font-semibold text-zinc-300 mb-1">Observação</label>
-                    <textarea
-                      rows="3"
-                      value={solicitacaoObservacao}
-                      onChange={(e) => setSolicitacaoObservacao(e.target.value)}
-                      placeholder="Observações complementares..."
-                      className="w-full p-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white focus:outline-none focus:border-[#FF7A00] resize-none"
-                    ></textarea>
+                    <textarea rows="3" value={solicitacaoObservacao} onChange={(e) => setSolicitacaoObservacao(e.target.value)} className="w-full p-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white resize-none"></textarea>
                   </div>
 
                   <div className="flex justify-end gap-2 pt-3 border-t border-[#0C5283]/40">
-                    <button
-                      type="button"
-                      onClick={() => setModalSolicitacaoAberto(false)}
-                      className="px-4 py-2 rounded-xl text-zinc-400 hover:text-white"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-5 py-2 rounded-xl bg-[#FF7A00] hover:bg-[#EA580C] text-white font-bold transition shadow-lg shadow-orange-500/20"
-                    >
-                      Gravar Solicitação
-                    </button>
+                    <button type="button" onClick={() => setModalSolicitacaoAberto(false)} className="px-4 py-2 rounded-xl text-zinc-400">Cancelar</button>
+                    <button type="submit" className="px-5 py-2 rounded-xl bg-[#FF7A00] hover:bg-[#EA580C] text-white font-bold">Gravar Solicitação</button>
                   </div>
                 </form>
               </div>
             </div>
           )}
 
-          {/* MODAL: ADICIONAR / EDITAR NO ESTOQUE */}
+          {/* MODAL: ESTOQUE */}
           {modalMaterialAberto && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm">
               <div className="bg-[#0A1D2D] border border-[#0C5283] rounded-2xl p-6 max-w-2xl w-full shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
                 <div className="flex items-center justify-between border-b border-[#0C5283]/40 pb-3">
-                  <h3 className="font-bold text-base text-white">
-                    {materialEmEdicao ? 'Editar Material' : 'Adicionar Material'}
-                  </h3>
-                  <button type="button" onClick={() => setModalMaterialAberto(false)} className="text-zinc-400 hover:text-white text-sm">✕</button>
+                  <h3 className="font-bold text-base text-white">{materialEmEdicao ? 'Editar Material' : 'Adicionar Material'}</h3>
+                  <button type="button" onClick={() => setModalMaterialAberto(false)} className="text-zinc-400">✕</button>
                 </div>
-
                 <form onSubmit={salvarMaterial} className="space-y-4 text-xs">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block font-semibold text-zinc-300 mb-1">Empreiteira *</label>
-                      <input
-                        type="text"
-                        required
-                        value={campoEmpreiteira}
-                        onChange={(e) => setCampoEmpreiteira(e.target.value)}
-                        placeholder="Ex: COMPEL"
-                        className="w-full h-10 px-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white focus:outline-none focus:border-[#FF7A00]"
-                      />
+                      <input type="text" required value={campoEmpreiteira} onChange={(e) => setCampoEmpreiteira(e.target.value)} className="w-full h-10 px-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white" />
                     </div>
-
                     <div>
                       <label className="block font-semibold text-zinc-300 mb-1">Código Material *</label>
-                      <input
-                        type="text"
-                        required
-                        value={campoCodigoMaterial}
-                        onChange={(e) => setCampoCodigoMaterial(e.target.value)}
-                        placeholder="Ex: 690001"
-                        className="w-full h-10 px-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white focus:outline-none focus:border-[#FF7A00]"
-                      />
+                      <input type="text" required value={campoCodigoMaterial} onChange={(e) => setCampoCodigoMaterial(e.target.value)} className="w-full h-10 px-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white" />
                     </div>
-
                     <div className="sm:col-span-2">
                       <label className="block font-semibold text-zinc-300 mb-1">Descrição *</label>
-                      <input
-                        type="text"
-                        required
-                        value={campoDescSimplificada}
-                        onChange={(e) => setCampoDescSimplificada(e.target.value)}
-                        placeholder="Ex: Religador 630A"
-                        className="w-full h-10 px-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white focus:outline-none focus:border-[#FF7A00]"
-                      />
+                      <input type="text" required value={campoDescSimplificada} onChange={(e) => setCampoDescSimplificada(e.target.value)} className="w-full h-10 px-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white" />
                     </div>
-
                     <div>
                       <label className="block font-semibold text-zinc-300 mb-1">Saldo Físico *</label>
-                      <input
-                        type="number"
-                        min="0"
-                        required
-                        value={campoSaldoFisico}
-                        onChange={(e) => setCampoSaldoFisico(e.target.value === '' ? '' : Number(e.target.value))}
-                        placeholder="Ex: 5"
-                        className="w-full h-10 px-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white focus:outline-none focus:border-[#FF7A00]"
-                      />
+                      <input type="number" min="0" required value={campoSaldoFisico} onChange={(e) => setCampoSaldoFisico(e.target.value === '' ? '' : Number(e.target.value))} className="w-full h-10 px-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white" />
                     </div>
-
                     <div>
                       <label className="block font-semibold text-zinc-300 mb-1">Cod Depósito *</label>
-                      <input
-                        type="text"
-                        required
-                        value={campoCodDeposito}
-                        onChange={(e) => setCampoCodDeposito(e.target.value)}
-                        placeholder="Ex: 0001"
-                        className="w-full h-10 px-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white focus:outline-none focus:border-[#FF7A00]"
-                      />
+                      <input type="text" required value={campoCodDeposito} onChange={(e) => setCampoCodDeposito(e.target.value)} className="w-full h-10 px-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white" />
                     </div>
-
                     <div>
                       <label className="block font-semibold text-zinc-300 mb-1">Supervisão</label>
-                      <input
-                        type="text"
-                        value={campoSupervisao}
-                        onChange={(e) => setCampoSupervisao(e.target.value)}
-                        placeholder="Ex: Campo Grande"
-                        className="w-full h-10 px-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white focus:outline-none focus:border-[#FF7A00]"
-                      />
+                      <input type="text" value={campoSupervisao} onChange={(e) => setCampoSupervisao(e.target.value)} className="w-full h-10 px-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white" />
                     </div>
-
                     <div>
                       <label className="block font-semibold text-zinc-300 mb-1">Tipo de Depósito</label>
-                      <input
-                        type="text"
-                        required
-                        value={campoTipoDeposito}
-                        onChange={(e) => setCampoTipoDeposito(e.target.value)}
-                        placeholder="Ex: Almoxarifado"
-                        className="w-full h-10 px-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white focus:outline-none focus:border-[#FF7A00]"
-                      />
+                      <input type="text" required value={campoTipoDeposito} onChange={(e) => setCampoTipoDeposito(e.target.value)} className="w-full h-10 px-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white" />
                     </div>
-
                     <div className="sm:col-span-2">
                       <label className="block font-semibold text-zinc-300 mb-1">Marca</label>
-                      <input
-                        type="text"
-                        value={campoMarcaEquipamento}
-                        onChange={(e) => setCampoMarcaEquipamento(e.target.value)}
-                        placeholder="Ex: Noja Power"
-                        className="w-full h-10 px-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white focus:outline-none focus:border-[#FF7A00]"
-                      />
+                      <input type="text" value={campoMarcaEquipamento} onChange={(e) => setCampoMarcaEquipamento(e.target.value)} className="w-full h-10 px-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white" />
                     </div>
                   </div>
-
                   <div>
                     <label className="block font-semibold text-zinc-300 mb-1">Observação</label>
-                    <textarea
-                      rows="3"
-                      value={campoObservacao}
-                      onChange={(e) => setCampoObservacao(e.target.value)}
-                      placeholder="Detalhes adicionais..."
-                      className="w-full p-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white focus:outline-none focus:border-[#FF7A00] resize-none"
-                    ></textarea>
+                    <textarea rows="3" value={campoObservacao} onChange={(e) => setCampoObservacao(e.target.value)} className="w-full p-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white resize-none"></textarea>
                   </div>
-
                   <div className="flex justify-end gap-2 pt-3 border-t border-[#0C5283]/40">
-                    <button type="button" onClick={() => setModalMaterialAberto(false)} className="px-4 py-2 rounded-xl text-zinc-400 hover:text-white">
-                      Cancelar
-                    </button>
-                    <button type="submit" className="px-5 py-2 rounded-xl bg-[#FF7A00] hover:bg-[#EA580C] text-white font-bold transition">
-                      {materialEmEdicao ? 'Salvar Alterações' : 'Cadastrar'}
-                    </button>
+                    <button type="button" onClick={() => setModalMaterialAberto(false)} className="px-4 py-2 rounded-xl text-zinc-400">Cancelar</button>
+                    <button type="submit" className="px-5 py-2 rounded-xl bg-[#FF7A00] hover:bg-[#EA580C] text-white font-bold">{materialEmEdicao ? 'Salvar Alterações' : 'Cadastrar'}</button>
                   </div>
                 </form>
               </div>
             </div>
           )}
 
-          {/* MODAL DE SENHA CHAVE */}
+          {/* MODAL: SENHA CHAVE */}
           {modalSenhaAberto && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
               <div className="bg-[#0A1D2D] border border-[#FF7A00]/40 rounded-2xl p-6 max-w-sm w-full shadow-2xl space-y-4">
-                <div>
-                  <h3 className="font-bold text-white text-sm">Autorização Requerida</h3>
-                  <p className="text-xs text-zinc-400 mt-0.5">
-                    {acaoProtegida === 'excluir_solicitacao' && 'Insira a senha chave para excluir esta solicitação.'}
-                    {acaoProtegida === 'excluir' && 'Insira a senha chave para excluir este item do estoque.'}
-                    {acaoProtegida === 'inserir' && 'Insira a senha chave para importar dados.'}
-                    {acaoProtegida === 'extrair' && 'Insira a senha chave para exportar a base.'}
-                  </p>
-                </div>
-
+                <h3 className="font-bold text-white text-sm">Autorização Requerida</h3>
                 <form onSubmit={validarSenhaEExecutar} className="space-y-3">
                   <input
                     type="password"
@@ -1503,33 +1088,12 @@
                       setExibirErroSenha(false);
                     }}
                     placeholder="Digite a senha..."
-                    className="w-full h-11 px-3.5 text-center tracking-widest text-lg font-bold rounded-xl bg-[#07131D] border border-[#0C5283] text-white focus:outline-none focus:border-[#FF7A00]"
+                    className="w-full h-11 px-3.5 text-center tracking-widest text-lg font-bold rounded-xl bg-[#07131D] border border-[#0C5283] text-white"
                   />
-
-                  {exibirErroSenha && (
-                    <p className="text-xs text-rose-400 text-center">Senha incorreta!</p>
-                  )}
-
+                  {exibirErroSenha && <p className="text-xs text-rose-400 text-center">Senha incorreta!</p>}
                   <div className="flex justify-end gap-2 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setModalSenhaAberto(false);
-                        setAcaoProtegida(null);
-                        setIdItemParaExcluir(null);
-                      }}
-                      className="px-4 py-2 rounded-xl text-zinc-400 hover:text-white text-xs"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="submit"
-                      className={`px-4 py-2 rounded-xl text-white font-bold text-xs ${
-                        acaoProtegida?.startsWith('excluir') ? 'bg-rose-600 hover:bg-rose-500' : 'bg-[#FF7A00] hover:bg-[#EA580C]'
-                      }`}
-                    >
-                      Confirmar
-                    </button>
+                    <button type="button" onClick={() => setModalSenhaAberto(false)} className="px-4 py-2 rounded-xl text-zinc-400 text-xs">Cancelar</button>
+                    <button type="submit" className="px-4 py-2 rounded-xl bg-[#FF7A00] hover:bg-[#EA580C] text-white font-bold text-xs">Confirmar</button>
                   </div>
                 </form>
               </div>
