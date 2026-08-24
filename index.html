@@ -23,13 +23,18 @@
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
   <style>
+    body {
+      background: linear-gradient(rgba(7, 19, 29, 0.88), rgba(7, 19, 29, 0.94)),
+                  url('https://images.unsplash.com/photo-1473341304170-971dccb5ac1e?q=80&w=1920&auto=format&fit=crop') no-repeat center center fixed;
+      background-size: cover;
+    }
     ::-webkit-scrollbar { width: 8px; height: 8px; }
     ::-webkit-scrollbar-track { background: #07131D; }
     ::-webkit-scrollbar-thumb { background: #0C5283; border-radius: 4px; }
     ::-webkit-scrollbar-thumb:hover { background: #EA580C; }
   </style>
 </head>
-<body class="bg-[#07131D] text-zinc-100 font-sans antialiased min-h-screen">
+<body class="text-zinc-100 font-sans antialiased min-h-screen">
   <div id="root"></div>
 
   <script type="text/babel">
@@ -54,7 +59,8 @@
     const db = firebase.firestore();
 
     const ADMIN_SISTEMA = "renataalcantaraferreira@gmail.com";
-    const HASH_SENHA_MESTRE = "d8563de3091e129a6b04f5a37d426f7574287f34be8549b812168dcb9c16da37"; // SHA-256 de "1240"
+    // Hash SHA-256 da senha '69472'
+    const HASH_SENHA_MESTRE = "8f307481a1795c721b068dae1ea553316ab64a13f704a29c118742ea3b25f3c5";
 
     const calcularHashSHA256 = async (texto) => {
       const encoder = new TextEncoder();
@@ -84,6 +90,8 @@
       const [solicitacoesAcesso, setSolicitacoesAcesso] = useState([]);
       const [usuarioLogado, setUsuarioLogado] = useState(() => localStorage.getItem('usuario_logado_eed_energisa_v2') || null);
       const [emailInputLogin, setEmailInputLogin] = useState('');
+      const [senhaAdminLogin, setSenhaAdminLogin] = useState('');
+      const [erroSenhaAdmin, setErroSenhaAdmin] = useState(false);
       const [mensagemProcessamento, setMensagemProcessamento] = useState(false);
       const [novoEmailAcesso, setNovoEmailAcesso] = useState('');
 
@@ -122,6 +130,23 @@
         e.preventDefault();
         const emailNormalizado = emailInputLogin.trim().toLowerCase();
         if (!emailNormalizado) return;
+
+        // Se for o e-mail administrador, exige a senha chave 69472
+        if (emailNormalizado === ADMIN_SISTEMA.toLowerCase()) {
+          const hashDigitado = await calcularHashSHA256(senhaAdminLogin);
+          if (hashDigitado !== HASH_SENHA_MESTRE) {
+            setErroSenhaAdmin(true);
+            return;
+          }
+          setErroSenhaAdmin(false);
+          setUsuarioLogado(emailNormalizado);
+          localStorage.setItem('usuario_logado_eed_energisa_v2', emailNormalizado);
+          setMensagemProcessamento(false);
+          setEmailInputLogin('');
+          setSenhaAdminLogin('');
+          dispararNotificacao('Acesso de Administrador autenticado!');
+          return;
+        }
 
         const docRef = db.collection('sistema_eed').doc('acessos');
         const doc = await docRef.get();
@@ -580,11 +605,13 @@
       };
 
       // =======================================================================
-      // TELA DE BLOQUEIO INICIAL (TRAVA DE ACESSO)
+      // TELA DE BLOQUEIO INICIAL (TRAVA DE ACESSO COM SENHA MESTRE 69472)
       // =======================================================================
       if (!usuarioLogado) {
+        const digitouAdmin = emailInputLogin.trim().toLowerCase() === ADMIN_SISTEMA.toLowerCase();
+
         return (
-          <div className="min-h-screen bg-[#07131D] text-zinc-100 flex items-center justify-center p-4">
+          <div className="min-h-screen flex items-center justify-center p-4">
             {notificacao && (
               <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-xl text-xs font-semibold shadow-2xl border transition-all ${
                 notificacao.tipo === 'sucesso' ? 'bg-emerald-950/90 border-emerald-500 text-emerald-300' : 'bg-rose-950/90 border-rose-500 text-rose-300'
@@ -593,17 +620,17 @@
               </div>
             )}
 
-            <div className="bg-[#0A1D2D] border border-[#0C5283] rounded-3xl p-8 sm:p-10 max-w-md w-full shadow-2xl space-y-6 text-center">
+            <div className="bg-[#0A1D2D]/95 border border-[#0C5283] rounded-3xl p-8 sm:p-10 max-w-md w-full shadow-2xl space-y-6 text-center backdrop-blur-md">
               <div>
                 <span className="text-4xl">🔒</span>
                 <h1 className="text-xl font-extrabold text-white mt-3">Acesso Restrito</h1>
-                <p className="text-xs text-zinc-400 mt-1">
+                <p className="text-xs text-zinc-300 mt-1">
                   Informe seu e-mail corporativo para solicitar ou validar o acesso ao sistema.
                 </p>
               </div>
 
               {mensagemProcessamento ? (
-                <div className="bg-[#07131D] border border-[#FF7A00]/50 rounded-2xl p-5 text-center space-y-3">
+                <div className="bg-[#07131D]/90 border border-[#FF7A00]/50 rounded-2xl p-5 text-center space-y-3">
                   <span className="text-2xl">⏳</span>
                   <h3 className="text-sm font-bold text-white">Solicitação enviada</h3>
                   <p className="text-xs text-amber-300 font-medium">
@@ -617,6 +644,7 @@
                     onClick={() => {
                       setMensagemProcessamento(false);
                       setEmailInputLogin('');
+                      setSenhaAdminLogin('');
                     }}
                     className="mt-2 px-4 py-2 rounded-xl bg-[#0C5283] hover:bg-[#0C5283]/80 text-white font-semibold text-xs transition"
                   >
@@ -625,20 +653,49 @@
                 </div>
               ) : (
                 <form onSubmit={processarEntradaUsuario} className="space-y-4">
-                  <input
-                    type="email"
-                    required
-                    autoFocus
-                    value={emailInputLogin}
-                    onChange={(e) => setEmailInputLogin(e.target.value)}
-                    placeholder="seuemail@energisa.com.br"
-                    className="w-full h-11 px-4 rounded-xl bg-[#07131D] border border-[#0C5283] text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#FF7A00]"
-                  />
+                  <div className="space-y-3 text-left">
+                    <div>
+                      <label className="text-[11px] font-semibold text-zinc-300 block mb-1">E-mail de Acesso:</label>
+                      <input
+                        type="email"
+                        required
+                        autoFocus
+                        value={emailInputLogin}
+                        onChange={(e) => {
+                          setEmailInputLogin(e.target.value);
+                          setErroSenhaAdmin(false);
+                        }}
+                        placeholder="seuemail@energisa.com.br"
+                        className="w-full h-11 px-4 rounded-xl bg-[#07131D]/90 border border-[#0C5283] text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#FF7A00]"
+                      />
+                    </div>
+
+                    {digitouAdmin && (
+                      <div className="pt-1">
+                        <label className="text-[11px] font-semibold text-amber-300 block mb-1">Senha Chave (Usuário Master):</label>
+                        <input
+                          type="password"
+                          required
+                          value={senhaAdminLogin}
+                          onChange={(e) => {
+                            setSenhaAdminLogin(e.target.value);
+                            setErroSenhaAdmin(false);
+                          }}
+                          placeholder="Digite a senha chave..."
+                          className="w-full h-11 px-4 text-center tracking-widest text-lg font-bold rounded-xl bg-[#07131D]/90 border border-[#FF7A00] text-white focus:outline-none"
+                        />
+                        {erroSenhaAdmin && (
+                          <p className="text-[11px] text-rose-400 text-center mt-1">Senha chave incorreta!</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
                   <button
                     type="submit"
                     className="w-full h-11 rounded-xl bg-[#FF7A00] hover:bg-[#EA580C] text-white font-bold text-sm transition shadow-lg shadow-orange-500/20 active:scale-95"
                   >
-                    Acessar / Solicitar Acesso
+                    {digitouAdmin ? 'Entrar como Administrador' : 'Acessar / Solicitar Acesso'}
                   </button>
                 </form>
               )}
@@ -651,7 +708,7 @@
       // APLICAÇÃO PRINCIPAL (DESBLOQUEADA)
       // =======================================================================
       return (
-        <div className="min-h-screen bg-[#07131D] text-zinc-100 flex flex-col">
+        <div className="min-h-screen flex flex-col">
           {notificacao && (
             <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-xl text-xs font-semibold shadow-2xl border transition-all ${
               notificacao.tipo === 'sucesso' ? 'bg-emerald-950/90 border-emerald-500 text-emerald-300' : 'bg-rose-950/90 border-rose-500 text-rose-300'
@@ -681,7 +738,7 @@
           {/* VISTA 1: CAPA */}
           {telaAtual === 'capa' && (
             <main className="flex-1 flex flex-col items-center justify-center p-6 sm:p-10 max-w-5xl mx-auto w-full space-y-8">
-              <div className="w-full rounded-3xl overflow-hidden shadow-2xl border border-[#0C5283]/60 bg-gradient-to-br from-[#0C5283] via-[#093d63] to-[#07131D] p-10 text-center">
+              <div className="w-full rounded-3xl overflow-hidden shadow-2xl border border-[#0C5283]/60 bg-gradient-to-br from-[#0C5283]/90 via-[#093d63]/90 to-[#07131D]/90 p-10 text-center backdrop-blur-md">
                 <span className="text-[11px] font-bold tracking-widest text-[#FF7A00] uppercase bg-[#FF7A00]/15 border border-[#FF7A00]/30 px-3.5 py-1 rounded-full inline-block mb-3">
                   Gestão Operacional
                 </span>
@@ -689,12 +746,12 @@
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 w-full">
-                <button type="button" onClick={() => setTelaAtual('controle')} className="bg-[#0A1D2D] hover:bg-[#0C5283]/40 border border-[#0C5283]/70 hover:border-[#FF7A00]/70 p-8 rounded-2xl transition text-center space-y-3 shadow-xl flex flex-col items-center justify-center">
+                <button type="button" onClick={() => setTelaAtual('controle')} className="bg-[#0A1D2D]/90 hover:bg-[#0C5283]/50 border border-[#0C5283]/70 hover:border-[#FF7A00]/70 p-8 rounded-2xl transition text-center space-y-3 shadow-xl flex flex-col items-center justify-center backdrop-blur-md">
                   <span className="text-4xl">📦</span>
                   <h2 className="text-lg font-bold text-white">Controle</h2>
                 </button>
 
-                <button type="button" onClick={() => setTelaAtual('solicitacao')} className="bg-[#0A1D2D] hover:bg-[#0C5283]/40 border border-[#0C5283]/70 hover:border-[#FF7A00]/70 p-8 rounded-2xl transition text-center space-y-3 shadow-xl flex flex-col items-center justify-center">
+                <button type="button" onClick={() => setTelaAtual('solicitacao')} className="bg-[#0A1D2D]/90 hover:bg-[#0C5283]/50 border border-[#0C5283]/70 hover:border-[#FF7A00]/70 p-8 rounded-2xl transition text-center space-y-3 shadow-xl flex flex-col items-center justify-center backdrop-blur-md">
                   <span className="text-4xl">📋</span>
                   <h2 className="text-lg font-bold text-white">Solicitação</h2>
                 </button>
@@ -705,7 +762,7 @@
                     if (!ehAdministrador) return dispararNotificacao('Acesso restrito ao administrador.', 'erro');
                     setTelaAtual('gerenciar');
                   }}
-                  className="bg-[#0A1D2D] hover:bg-[#0C5283]/40 border border-[#0C5283]/70 hover:border-[#FF7A00]/70 p-8 rounded-2xl transition text-center space-y-3 shadow-xl flex flex-col items-center justify-center relative"
+                  className="bg-[#0A1D2D]/90 hover:bg-[#0C5283]/50 border border-[#0C5283]/70 hover:border-[#FF7A00]/70 p-8 rounded-2xl transition text-center space-y-3 shadow-xl flex flex-col items-center justify-center relative backdrop-blur-md"
                 >
                   <span className="text-4xl">🔒</span>
                   <h2 className="text-lg font-bold text-white">Gerenciar Acesso</h2>
@@ -736,30 +793,30 @@
               </div>
 
               {/* Filtros */}
-              <div className="bg-[#0A1D2D] border border-[#0C5283]/50 rounded-2xl p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+              <div className="bg-[#0A1D2D]/90 border border-[#0C5283]/50 rounded-2xl p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs backdrop-blur-md">
                 <div>
                   <label className="text-zinc-400 block mb-1">Empreiteira</label>
-                  <input type="text" value={filtroEmpreiteira} onChange={(e) => setFiltroEmpreiteira(e.target.value)} placeholder="Buscar..." className="w-full h-8 px-3 rounded-lg bg-[#07131D] border border-[#0C5283] text-white" />
+                  <input type="text" value={filtroEmpreiteira} onChange={(e) => setFiltroEmpreiteira(e.target.value)} placeholder="Buscar..." className="w-full h-8 px-3 rounded-lg bg-[#07131D]/90 border border-[#0C5283] text-white" />
                 </div>
                 <div>
                   <label className="text-zinc-400 block mb-1">Código Material</label>
-                  <input type="text" value={filtroCodigoMaterial} onChange={(e) => setFiltroCodigoMaterial(e.target.value)} placeholder="Buscar..." className="w-full h-8 px-3 rounded-lg bg-[#07131D] border border-[#0C5283] text-white" />
+                  <input type="text" value={filtroCodigoMaterial} onChange={(e) => setFiltroCodigoMaterial(e.target.value)} placeholder="Buscar..." className="w-full h-8 px-3 rounded-lg bg-[#07131D]/90 border border-[#0C5283] text-white" />
                 </div>
                 <div>
                   <label className="text-zinc-400 block mb-1">Descrição</label>
-                  <input type="text" value={filtroDescSimplificada} onChange={(e) => setFiltroDescSimplificada(e.target.value)} placeholder="Buscar..." className="w-full h-8 px-3 rounded-lg bg-[#07131D] border border-[#0C5283] text-white" />
+                  <input type="text" value={filtroDescSimplificada} onChange={(e) => setFiltroDescSimplificada(e.target.value)} placeholder="Buscar..." className="w-full h-8 px-3 rounded-lg bg-[#07131D]/90 border border-[#0C5283] text-white" />
                 </div>
                 <div>
                   <label className="text-zinc-400 block mb-1">Saldo Físico &gt;</label>
-                  <input type="number" value={filtroSaldoFisicoMaiorQue} onChange={(e) => setFiltroSaldoFisicoMaiorQue(e.target.value)} placeholder="0" className="w-full h-8 px-3 rounded-lg bg-[#07131D] border border-[#0C5283] text-white" />
+                  <input type="number" value={filtroSaldoFisicoMaiorQue} onChange={(e) => setFiltroSaldoFisicoMaiorQue(e.target.value)} placeholder="0" className="w-full h-8 px-3 rounded-lg bg-[#07131D]/90 border border-[#0C5283] text-white" />
                 </div>
               </div>
 
               {/* Tabela */}
-              <div className="bg-[#0A1D2D] border border-[#0C5283]/40 rounded-2xl overflow-hidden shadow-xl">
+              <div className="bg-[#0A1D2D]/90 border border-[#0C5283]/40 rounded-2xl overflow-hidden shadow-xl backdrop-blur-md">
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs text-zinc-200">
-                    <thead className="bg-[#0C5283]/30 uppercase text-[10px] tracking-wider text-zinc-300 border-b border-[#0C5283]/40 font-semibold">
+                    <thead className="bg-[#0C5283]/40 uppercase text-[10px] tracking-wider text-zinc-300 border-b border-[#0C5283]/40 font-semibold">
                       <tr>
                         <th className="py-3 px-3">Empreiteira</th>
                         <th className="py-3 px-3">Código</th>
@@ -817,14 +874,14 @@
               </div>
 
               {solicitacoes.length === 0 ? (
-                <div className="bg-[#0A1D2D] border border-[#0C5283]/40 rounded-2xl p-12 text-center space-y-3">
+                <div className="bg-[#0A1D2D]/90 border border-[#0C5283]/40 rounded-2xl p-12 text-center space-y-3 backdrop-blur-md">
                   <span className="text-3xl">📋</span>
                   <h3 className="text-sm font-bold text-white">Nenhuma solicitação registrada</h3>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {solicitacoes.map((sol) => (
-                    <div key={sol.id} className="bg-[#0A1D2D] border border-[#0C5283] rounded-2xl p-4 space-y-3.5 shadow-lg text-xs flex flex-col justify-between">
+                    <div key={sol.id} className="bg-[#0A1D2D]/90 border border-[#0C5283] rounded-2xl p-4 space-y-3.5 shadow-lg text-xs flex flex-col justify-between backdrop-blur-md">
                       <div className="space-y-2.5">
                         <div className="flex justify-between items-start border-b border-[#0C5283]/40 pb-2">
                           <div>
@@ -836,7 +893,7 @@
                         <div className="space-y-1">
                           <span className="text-[10px] uppercase font-bold text-zinc-400">EED SOLICITADO:</span>
                           {sol.materiais.map((item, idx) => (
-                            <div key={idx} className="flex justify-between items-center bg-[#07131D] p-2 rounded-lg border border-[#0C5283]/30">
+                            <div key={idx} className="flex justify-between items-center bg-[#07131D]/90 p-2 rounded-lg border border-[#0C5283]/30">
                               <span className="text-zinc-200 truncate">{item.material}</span>
                               <span className="text-[#FF7A00] font-bold ml-2">Qtd: {item.quantidade}</span>
                             </div>
@@ -887,7 +944,7 @@
               </div>
 
               {/* Solicitações Pendentes */}
-              <div className="bg-[#0A1D2D] border border-[#FF7A00]/50 rounded-2xl p-5 space-y-3">
+              <div className="bg-[#0A1D2D]/90 border border-[#FF7A00]/50 rounded-2xl p-5 space-y-3 backdrop-blur-md">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-white flex items-center gap-2">
                     <span>📩</span>
@@ -903,7 +960,7 @@
                 ) : (
                   <div className="space-y-2 pt-1">
                     {solicitacoesAcesso.map((emailPend) => (
-                      <div key={emailPend} className="flex items-center justify-between p-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-xs">
+                      <div key={emailPend} className="flex items-center justify-between p-3 rounded-xl bg-[#07131D]/90 border border-[#0C5283] text-xs">
                         <span className="font-medium text-white">{emailPend}</span>
                         <div className="flex items-center gap-2">
                           <button type="button" onClick={() => aprovarSolicitacao(emailPend)} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs">Aprovar</button>
@@ -916,7 +973,7 @@
               </div>
 
               {/* Liberar Manual */}
-              <form onSubmit={liberarNovoAcessoManual} className="space-y-3 bg-[#0A1D2D] p-5 rounded-2xl border border-[#0C5283]">
+              <form onSubmit={liberarNovoAcessoManual} className="space-y-3 bg-[#0A1D2D]/90 p-5 rounded-2xl border border-[#0C5283] backdrop-blur-md">
                 <label className="text-xs font-bold text-white block">Liberar Novo Acesso Manualmente:</label>
                 <div className="flex gap-2">
                   <input
@@ -925,18 +982,18 @@
                     value={novoEmailAcesso}
                     onChange={(e) => setNovoEmailAcesso(e.target.value)}
                     placeholder="usuario@energisa.com.br"
-                    className="flex-1 h-10 px-3.5 rounded-xl bg-[#07131D] border border-[#0C5283] text-xs text-white"
+                    className="flex-1 h-10 px-3.5 rounded-xl bg-[#07131D]/90 border border-[#0C5283] text-xs text-white"
                   />
                   <button type="submit" className="px-5 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-xs">Liberar</button>
                 </div>
               </form>
 
               {/* Lista Autorizados */}
-              <div className="bg-[#0A1D2D] border border-[#0C5283]/40 rounded-2xl p-5 space-y-3">
+              <div className="bg-[#0A1D2D]/90 border border-[#0C5283]/40 rounded-2xl p-5 space-y-3 backdrop-blur-md">
                 <span className="text-xs font-bold text-zinc-300 block">Usuários Atualmente Autorizados ({usuariosPermitidos.length}):</span>
                 <div className="space-y-2">
                   {usuariosPermitidos.map((user) => (
-                    <div key={user} className="flex items-center justify-between p-3 rounded-xl bg-[#07131D] border border-[#0C5283]/50 text-xs">
+                    <div key={user} className="flex items-center justify-between p-3 rounded-xl bg-[#07131D]/90 border border-[#0C5283]/50 text-xs">
                       <span className="font-medium text-zinc-200">{user}</span>
                       {user.toLowerCase() !== ADMIN_SISTEMA.toLowerCase() ? (
                         <button type="button" onClick={() => revogarAcesso(user)} className="px-3 py-1 rounded-lg bg-rose-950/60 hover:bg-rose-900 text-rose-300 border border-rose-800 text-xs">Revogar</button>
@@ -1072,7 +1129,7 @@
             </div>
           )}
 
-          {/* MODAL: SENHA CHAVE */}
+          {/* MODAL: SENHA CHAVE DE AÇÕES (69472) */}
           {modalSenhaAberto && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
               <div className="bg-[#0A1D2D] border border-[#FF7A00]/40 rounded-2xl p-6 max-w-sm w-full shadow-2xl space-y-4">
