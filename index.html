@@ -24,14 +24,14 @@
 
   <style>
     body {
-      background: linear-gradient(rgba(7, 19, 29, 0.88), rgba(7, 19, 29, 0.94)),
+      background: linear-gradient(rgba(5, 14, 20, 0.90), rgba(4, 18, 26, 0.95)),
                   url('https://images.unsplash.com/photo-1473341304170-971dccb5ac1e?q=80&w=1920&auto=format&fit=crop') no-repeat center center fixed;
       background-size: cover;
     }
     ::-webkit-scrollbar { width: 8px; height: 8px; }
-    ::-webkit-scrollbar-track { background: #07131D; }
-    ::-webkit-scrollbar-thumb { background: #0C5283; border-radius: 4px; }
-    ::-webkit-scrollbar-thumb:hover { background: #EA580C; }
+    ::-webkit-scrollbar-track { background: #030D14; }
+    ::-webkit-scrollbar-thumb { background: #0F3B4C; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #10B981; }
   </style>
 </head>
 <body class="text-zinc-100 font-sans antialiased min-h-screen">
@@ -59,16 +59,30 @@
     const db = firebase.firestore();
 
     const ADMIN_SISTEMA = "renataalcantaraferreira@gmail.com";
-    // Hash SHA-256 da senha '69472'
-    const HASH_SENHA_MESTRE = "69472";
+    const SENHA_MESTRE_CORRETA = "69472";
 
-    const calcularHashSHA256 = async (texto) => {
-      const encoder = new TextEncoder();
-      const dados = encoder.encode(texto);
-      const bufferHash = await crypto.subtle.digest('SHA-256', dados);
-      const arrayHash = Array.from(new Uint8Array(bufferHash));
-      return arrayHash.map(b => b.toString(16).padStart(2, '0')).join('');
-    };
+    // Componente do Símbolo com Gradiente Verde e Ciano
+    const IconeSimboloEnergisa = ({ className = "w-7 h-7" }) => (
+      <svg viewBox="0 0 200 200" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="gradAuroraVerde" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#10B981" />
+            <stop offset="50%" stopColor="#06B6D4" />
+            <stop offset="100%" stopColor="#0284C7" />
+          </linearGradient>
+          <linearGradient id="gradAuroraAzul" x1="0%" y1="100%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#38BDF8" />
+            <stop offset="60%" stopColor="#0EA5E9" />
+            <stop offset="100%" stopColor="#059669" />
+          </linearGradient>
+        </defs>
+        <path d="M50,10 C130,20 170,80 100,100 C150,110 175,170 140,190 C180,130 140,50 50,10 Z" fill="url(#gradAuroraVerde)" opacity="0.95" />
+        <path d="M40,130 C70,100 110,95 90,60 C125,95 85,145 40,185 C35,165 35,145 40,130 Z" fill="url(#gradAuroraAzul)" opacity="0.85" />
+        <circle cx="110" cy="70" r="2" fill="#FFFFFF" opacity="0.85" />
+        <circle cx="90" cy="110" r="1.5" fill="#FFFFFF" opacity="0.95" />
+        <circle cx="130" cy="135" r="2" fill="#FFFFFF" opacity="0.75" />
+      </svg>
+    );
 
     const gerarCarimboAuditoria = (emailUsuario) => {
       const agora = new Date();
@@ -84,7 +98,7 @@
       const inputArquivoExcelRef = useRef(null);
 
       // ==========================================
-      // CONTROLE DE ACESSO SINCRONIZADO NA NUVEM
+      // CONTROLE DE ACESSO SINCRONIZADO
       // ==========================================
       const [usuariosPermitidos, setUsuariosPermitidos] = useState([ADMIN_SISTEMA]);
       const [solicitacoesAcesso, setSolicitacoesAcesso] = useState([]);
@@ -131,10 +145,8 @@
         const emailNormalizado = emailInputLogin.trim().toLowerCase();
         if (!emailNormalizado) return;
 
-        // Se for o e-mail administrador, exige a senha chave 69472
         if (emailNormalizado === ADMIN_SISTEMA.toLowerCase()) {
-          const hashDigitado = await calcularHashSHA256(senhaAdminLogin);
-          if (hashDigitado !== HASH_SENHA_MESTRE) {
+          if (senhaAdminLogin.trim() !== SENHA_MESTRE_CORRETA) {
             setErroSenhaAdmin(true);
             return;
           }
@@ -144,7 +156,7 @@
           setMensagemProcessamento(false);
           setEmailInputLogin('');
           setSenhaAdminLogin('');
-          dispararNotificacao('Acesso de Administrador autenticado!');
+          dispararNotificacao('Acesso de Administrador liberado com sucesso!');
           return;
         }
 
@@ -378,7 +390,7 @@
 
         await db.collection('solicitacoes_eed').add(novaSolicitacao);
         setModalSolicitacaoAberto(false);
-        dispararNotificacao('Solicitação gravada na nuvem!');
+        dispararNotificacao('Solicitação gravada com sucesso!');
       };
 
       const salvarMaterial = async (e) => {
@@ -418,7 +430,7 @@
           dispararNotificacao('Material atualizado!');
         } else {
           await db.collection('estoque_eed').add(dados);
-          dispararNotificacao('Material gravado na nuvem!');
+          dispararNotificacao('Material cadastrado no estoque!');
         }
         setModalMaterialAberto(false);
       };
@@ -457,7 +469,7 @@
             });
 
             await batch.commit();
-            dispararNotificacao(`Importados ${linhas.length} itens para a nuvem!`);
+            dispararNotificacao(`Importados ${linhas.length} itens com sucesso!`);
           } catch (err) {
             dispararNotificacao('Erro ao processar arquivo.', 'erro');
           } finally {
@@ -475,10 +487,9 @@
         setModalSenhaAberto(true);
       };
 
-      const validarSenhaEExecutar = async (e) => {
+      const validarSenhaEExecutar = (e) => {
         e.preventDefault();
-        const hashDigitado = await calcularHashSHA256(senhaDigitada);
-        if (hashDigitado !== HASH_SENHA_MESTRE) {
+        if (senhaDigitada.trim() !== SENHA_MESTRE_CORRETA) {
           setExibirErroSenha(true);
           return;
         }
@@ -488,11 +499,11 @@
         setModalSenhaAberto(false);
 
         if (acao === 'excluir' && idExcluir) {
-          await db.collection('estoque_eed').doc(idExcluir).delete();
-          dispararNotificacao('Material excluído!');
+          db.collection('estoque_eed').doc(idExcluir).delete();
+          dispararNotificacao('Material excluído do estoque!');
         } else if (acao === 'excluir_solicitacao' && idExcluir) {
-          await db.collection('solicitacoes_eed').doc(idExcluir).delete();
-          dispararNotificacao('Solicitação excluída!');
+          db.collection('solicitacoes_eed').doc(idExcluir).delete();
+          dispararNotificacao('Solicitação excluída com sucesso!');
         } else if (acao === 'extrair') {
           executarExtracaoExcel();
         } else if (acao === 'inserir' && inputArquivoExcelRef.current) {
@@ -548,7 +559,7 @@
         const pasta = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(pasta, folha, "Solicitacoes");
         XLSX.writeFile(pasta, `solicitacoes_eed_${new Date().toISOString().split('T')[0]}.xlsx`);
-        dispararNotificacao('Exportado com sucesso!');
+        dispararNotificacao('Solicitações exportadas com sucesso!');
       };
 
       const materiaisFiltrados = useMemo(() => {
@@ -599,13 +610,13 @@
         switch (status) {
           case 'Aprovado': return 'bg-emerald-950/80 text-emerald-300 border-emerald-500/50';
           case 'Reprovado': return 'bg-rose-950/80 text-rose-300 border-rose-500/50';
-          case 'EMD gerada (Concluido)': return 'bg-purple-950/80 text-purple-300 border-purple-500/50';
-          default: return 'bg-[#0C5283]/60 text-blue-200 border-[#0C5283]';
+          case 'EMD gerada (Concluido)': return 'bg-cyan-950/80 text-cyan-300 border-cyan-500/50';
+          default: return 'bg-[#0B3A4A]/80 text-cyan-200 border-cyan-700/60';
         }
       };
 
       // =======================================================================
-      // TELA DE BLOQUEIO INICIAL (TRAVA DE ACESSO COM SENHA MESTRE 69472)
+      // TELA DE BLOQUEIO INICIAL
       // =======================================================================
       if (!usuarioLogado) {
         const digitouAdmin = emailInputLogin.trim().toLowerCase() === ADMIN_SISTEMA.toLowerCase();
@@ -620,20 +631,22 @@
               </div>
             )}
 
-            <div className="bg-[#0A1D2D]/95 border border-[#0C5283] rounded-3xl p-8 sm:p-10 max-w-md w-full shadow-2xl space-y-6 text-center backdrop-blur-md">
-              <div>
-                <span className="text-4xl">🔒</span>
-                <h1 className="text-xl font-extrabold text-white mt-3">Acesso Restrito</h1>
+            <div className="bg-[#051622]/95 border border-cyan-800/50 rounded-3xl p-8 sm:p-10 max-w-md w-full shadow-2xl space-y-6 text-center backdrop-blur-md">
+              <div className="flex flex-col items-center">
+                <div className="w-16 h-16 rounded-2xl bg-[#030D14] border border-cyan-700/40 flex items-center justify-center p-2 shadow-inner mb-3">
+                  <IconeSimboloEnergisa className="w-12 h-12" />
+                </div>
+                <h1 className="text-xl font-extrabold text-white">Acesso Restrito</h1>
                 <p className="text-xs text-zinc-300 mt-1">
                   Informe seu e-mail corporativo para solicitar ou validar o acesso ao sistema.
                 </p>
               </div>
 
               {mensagemProcessamento ? (
-                <div className="bg-[#07131D]/90 border border-[#FF7A00]/50 rounded-2xl p-5 text-center space-y-3">
+                <div className="bg-[#030D14]/90 border border-emerald-500/50 rounded-2xl p-5 text-center space-y-3">
                   <span className="text-2xl">⏳</span>
                   <h3 className="text-sm font-bold text-white">Solicitação enviada</h3>
-                  <p className="text-xs text-amber-300 font-medium">
+                  <p className="text-xs text-emerald-300 font-medium">
                     "Sua solicitação está sendo processada, volte mais tarde."
                   </p>
                   <p className="text-[11px] text-zinc-400">
@@ -646,7 +659,7 @@
                       setEmailInputLogin('');
                       setSenhaAdminLogin('');
                     }}
-                    className="mt-2 px-4 py-2 rounded-xl bg-[#0C5283] hover:bg-[#0C5283]/80 text-white font-semibold text-xs transition"
+                    className="mt-2 px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-cyan-600 hover:opacity-90 text-white font-semibold text-xs transition"
                   >
                     Tentar Novamente
                   </button>
@@ -666,13 +679,13 @@
                           setErroSenhaAdmin(false);
                         }}
                         placeholder="seuemail@energisa.com.br"
-                        className="w-full h-11 px-4 rounded-xl bg-[#07131D]/90 border border-[#0C5283] text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#FF7A00]"
+                        className="w-full h-11 px-4 rounded-xl bg-[#030D14]/90 border border-cyan-800/60 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-400"
                       />
                     </div>
 
                     {digitouAdmin && (
                       <div className="pt-1">
-                        <label className="text-[11px] font-semibold text-amber-300 block mb-1">Senha Chave (Usuário Master):</label>
+                        <label className="text-[11px] font-semibold text-emerald-300 block mb-1">Senha Chave (Usuário Master):</label>
                         <input
                           type="password"
                           required
@@ -682,7 +695,7 @@
                             setErroSenhaAdmin(false);
                           }}
                           placeholder="Digite a senha chave..."
-                          className="w-full h-11 px-4 text-center tracking-widest text-lg font-bold rounded-xl bg-[#07131D]/90 border border-[#FF7A00] text-white focus:outline-none"
+                          className="w-full h-11 px-4 text-center tracking-widest text-lg font-bold rounded-xl bg-[#030D14]/90 border border-emerald-500 text-white focus:outline-none focus:border-cyan-400"
                         />
                         {erroSenhaAdmin && (
                           <p className="text-[11px] text-rose-400 text-center mt-1">Senha chave incorreta!</p>
@@ -693,7 +706,7 @@
 
                   <button
                     type="submit"
-                    className="w-full h-11 rounded-xl bg-[#FF7A00] hover:bg-[#EA580C] text-white font-bold text-sm transition shadow-lg shadow-orange-500/20 active:scale-95"
+                    className="w-full h-11 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-600 hover:from-emerald-600 hover:to-cyan-700 text-white font-bold text-sm transition shadow-lg shadow-cyan-900/30 active:scale-95"
                   >
                     {digitouAdmin ? 'Entrar como Administrador' : 'Acessar / Solicitar Acesso'}
                   </button>
@@ -705,7 +718,7 @@
       }
 
       // =======================================================================
-      // APLICAÇÃO PRINCIPAL (DESBLOQUEADA)
+      // APLICAÇÃO PRINCIPAL COM A NOVA PALETA
       // =======================================================================
       return (
         <div className="min-h-screen flex flex-col">
@@ -718,12 +731,17 @@
           )}
 
           {/* HEADER */}
-          <header className="border-b border-[#0C5283]/40 bg-[#07131D]/90 px-4 sm:px-8 py-3.5 flex items-center justify-between sticky top-0 z-30 backdrop-blur-md">
-            <button type="button" onClick={() => setTelaAtual('capa')} className="font-extrabold text-white text-sm tracking-wide">
-              Controle e solicitação de EED
+          <header className="border-b border-cyan-800/40 bg-[#04121A]/90 px-4 sm:px-8 py-3.5 flex items-center justify-between sticky top-0 z-30 backdrop-blur-md">
+            <button type="button" onClick={() => setTelaAtual('capa')} className="flex items-center gap-3 hover:opacity-90 transition text-left">
+              <div className="w-8 h-8 rounded-lg bg-[#030D14] border border-cyan-700/40 flex items-center justify-center p-1 shadow-md">
+                <IconeSimboloEnergisa className="w-6 h-6" />
+              </div>
+              <span className="font-extrabold text-white text-sm sm:text-base tracking-wide">
+                Controle e solicitação de EED
+              </span>
             </button>
             <div className="flex items-center gap-3 text-xs">
-              <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
               <span className="text-zinc-300 hidden md:inline">{usuarioLogado}</span>
               <button
                 type="button"
@@ -738,22 +756,22 @@
           {/* VISTA 1: CAPA */}
           {telaAtual === 'capa' && (
             <main className="flex-1 flex flex-col items-center justify-center p-6 sm:p-10 max-w-5xl mx-auto w-full space-y-8">
-              <div className="w-full rounded-3xl overflow-hidden shadow-2xl border border-[#0C5283]/60 bg-gradient-to-br from-[#0C5283]/90 via-[#093d63]/90 to-[#07131D]/90 p-10 text-center backdrop-blur-md">
-                <span className="text-[11px] font-bold tracking-widest text-[#FF7A00] uppercase bg-[#FF7A00]/15 border border-[#FF7A00]/30 px-3.5 py-1 rounded-full inline-block mb-3">
+              <div className="w-full rounded-3xl overflow-hidden shadow-2xl border border-cyan-700/40 bg-gradient-to-br from-[#063342]/90 via-[#04202B]/90 to-[#020F17]/90 p-10 text-center backdrop-blur-md">
+                <span className="text-[11px] font-bold tracking-widest text-emerald-400 uppercase bg-emerald-950/60 border border-emerald-500/30 px-3.5 py-1 rounded-full inline-block mb-3">
                   Gestão Operacional
                 </span>
                 <h1 className="text-2xl sm:text-4xl font-extrabold text-white">Controle e solicitação de EED</h1>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 w-full">
-                <button type="button" onClick={() => setTelaAtual('controle')} className="bg-[#0A1D2D]/90 hover:bg-[#0C5283]/50 border border-[#0C5283]/70 hover:border-[#FF7A00]/70 p-8 rounded-2xl transition text-center space-y-3 shadow-xl flex flex-col items-center justify-center backdrop-blur-md">
+                <button type="button" onClick={() => setTelaAtual('controle')} className="bg-[#051A24]/90 hover:bg-[#093547]/60 border border-cyan-800/60 hover:border-emerald-400/80 p-8 rounded-2xl transition text-center space-y-3 shadow-xl flex flex-col items-center justify-center backdrop-blur-md group">
                   <span className="text-4xl">📦</span>
-                  <h2 className="text-lg font-bold text-white">Controle</h2>
+                  <h2 className="text-lg font-bold text-white group-hover:text-emerald-300 transition">Controle</h2>
                 </button>
 
-                <button type="button" onClick={() => setTelaAtual('solicitacao')} className="bg-[#0A1D2D]/90 hover:bg-[#0C5283]/50 border border-[#0C5283]/70 hover:border-[#FF7A00]/70 p-8 rounded-2xl transition text-center space-y-3 shadow-xl flex flex-col items-center justify-center backdrop-blur-md">
+                <button type="button" onClick={() => setTelaAtual('solicitacao')} className="bg-[#051A24]/90 hover:bg-[#093547]/60 border border-cyan-800/60 hover:border-emerald-400/80 p-8 rounded-2xl transition text-center space-y-3 shadow-xl flex flex-col items-center justify-center backdrop-blur-md group">
                   <span className="text-4xl">📋</span>
-                  <h2 className="text-lg font-bold text-white">Solicitação</h2>
+                  <h2 className="text-lg font-bold text-white group-hover:text-emerald-300 transition">Solicitação</h2>
                 </button>
 
                 <button
@@ -762,12 +780,12 @@
                     if (!ehAdministrador) return dispararNotificacao('Acesso restrito ao administrador.', 'erro');
                     setTelaAtual('gerenciar');
                   }}
-                  className="bg-[#0A1D2D]/90 hover:bg-[#0C5283]/50 border border-[#0C5283]/70 hover:border-[#FF7A00]/70 p-8 rounded-2xl transition text-center space-y-3 shadow-xl flex flex-col items-center justify-center relative backdrop-blur-md"
+                  className="bg-[#051A24]/90 hover:bg-[#093547]/60 border border-cyan-800/60 hover:border-emerald-400/80 p-8 rounded-2xl transition text-center space-y-3 shadow-xl flex flex-col items-center justify-center relative backdrop-blur-md group"
                 >
                   <span className="text-4xl">🔒</span>
-                  <h2 className="text-lg font-bold text-white">Gerenciar Acesso</h2>
+                  <h2 className="text-lg font-bold text-white group-hover:text-emerald-300 transition">Gerenciar Acesso</h2>
                   {ehAdministrador && solicitacoesAcesso.length > 0 && (
-                    <span className="absolute top-4 right-4 bg-[#FF7A00] text-white text-[10px] font-bold px-2 py-0.5 rounded-full animate-bounce">
+                    <span className="absolute top-4 right-4 bg-emerald-500 text-black text-[10px] font-extrabold px-2 py-0.5 rounded-full animate-bounce">
                       {solicitacoesAcesso.length} pendente(s)
                     </span>
                   )}
@@ -779,44 +797,44 @@
           {/* VISTA 2: CONTROLE (ESTOQUE) */}
           {telaAtual === 'controle' && (
             <main className="flex-1 p-4 sm:p-8 max-w-7xl mx-auto w-full space-y-6">
-              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#0C5283]/40 pb-4">
+              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-cyan-800/40 pb-4">
                 <div className="flex items-center gap-3">
-                  <button type="button" onClick={() => setTelaAtual('capa')} className="p-2 rounded-xl bg-[#0C5283]/40 hover:bg-[#0C5283] text-zinc-200 text-xs">← Voltar</button>
-                  <h2 className="text-lg font-bold text-white">Controle de Estoque (Nuvem)</h2>
+                  <button type="button" onClick={() => setTelaAtual('capa')} className="p-2 rounded-xl bg-cyan-950/60 hover:bg-cyan-900 border border-cyan-800 text-zinc-200 text-xs">← Voltar</button>
+                  <h2 className="text-lg font-bold text-white">Controle de Estoque</h2>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <input type="file" ref={inputArquivoExcelRef} onChange={processarArquivoExcel} accept=".xlsx, .xls, .csv" className="hidden" />
-                  <button type="button" onClick={abrirModalAdicionar} className="px-3.5 py-2 rounded-xl bg-[#FF7A00] hover:bg-[#EA580C] text-white font-bold text-xs">+ Adicionar Item</button>
-                  <button type="button" onClick={() => solicitarSenhaParaAcao('inserir')} className="px-3 py-2 rounded-xl bg-emerald-800/80 hover:bg-emerald-700 text-white font-semibold text-xs border border-emerald-500/40">↑ Inserir Base</button>
-                  <button type="button" onClick={() => solicitarSenhaParaAcao('extrair')} className="px-3 py-2 rounded-xl bg-[#0C5283] hover:bg-[#0C5283]/80 text-white font-semibold text-xs border border-[#0C5283]">↓ Extrair Base</button>
+                  <button type="button" onClick={abrirModalAdicionar} className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-bold text-xs shadow-md shadow-emerald-950/50">+ Adicionar Item</button>
+                  <button type="button" onClick={() => solicitarSenhaParaAcao('inserir')} className="px-3 py-2 rounded-xl bg-teal-900/80 hover:bg-teal-800 text-teal-100 font-semibold text-xs border border-teal-600/50">↑ Inserir Base</button>
+                  <button type="button" onClick={() => solicitarSenhaParaAcao('extrair')} className="px-3 py-2 rounded-xl bg-cyan-950/80 hover:bg-cyan-900 text-cyan-200 font-semibold text-xs border border-cyan-700/60">↓ Extrair Base</button>
                 </div>
               </div>
 
               {/* Filtros */}
-              <div className="bg-[#0A1D2D]/90 border border-[#0C5283]/50 rounded-2xl p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs backdrop-blur-md">
+              <div className="bg-[#051A24]/90 border border-cyan-800/50 rounded-2xl p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs backdrop-blur-md">
                 <div>
                   <label className="text-zinc-400 block mb-1">Empreiteira</label>
-                  <input type="text" value={filtroEmpreiteira} onChange={(e) => setFiltroEmpreiteira(e.target.value)} placeholder="Buscar..." className="w-full h-8 px-3 rounded-lg bg-[#07131D]/90 border border-[#0C5283] text-white" />
+                  <input type="text" value={filtroEmpreiteira} onChange={(e) => setFiltroEmpreiteira(e.target.value)} placeholder="Buscar..." className="w-full h-8 px-3 rounded-lg bg-[#030D14]/90 border border-cyan-800/60 text-white focus:outline-none focus:border-emerald-400" />
                 </div>
                 <div>
                   <label className="text-zinc-400 block mb-1">Código Material</label>
-                  <input type="text" value={filtroCodigoMaterial} onChange={(e) => setFiltroCodigoMaterial(e.target.value)} placeholder="Buscar..." className="w-full h-8 px-3 rounded-lg bg-[#07131D]/90 border border-[#0C5283] text-white" />
+                  <input type="text" value={filtroCodigoMaterial} onChange={(e) => setFiltroCodigoMaterial(e.target.value)} placeholder="Buscar..." className="w-full h-8 px-3 rounded-lg bg-[#030D14]/90 border border-cyan-800/60 text-white focus:outline-none focus:border-emerald-400" />
                 </div>
                 <div>
                   <label className="text-zinc-400 block mb-1">Descrição</label>
-                  <input type="text" value={filtroDescSimplificada} onChange={(e) => setFiltroDescSimplificada(e.target.value)} placeholder="Buscar..." className="w-full h-8 px-3 rounded-lg bg-[#07131D]/90 border border-[#0C5283] text-white" />
+                  <input type="text" value={filtroDescSimplificada} onChange={(e) => setFiltroDescSimplificada(e.target.value)} placeholder="Buscar..." className="w-full h-8 px-3 rounded-lg bg-[#030D14]/90 border border-cyan-800/60 text-white focus:outline-none focus:border-emerald-400" />
                 </div>
                 <div>
                   <label className="text-zinc-400 block mb-1">Saldo Físico &gt;</label>
-                  <input type="number" value={filtroSaldoFisicoMaiorQue} onChange={(e) => setFiltroSaldoFisicoMaiorQue(e.target.value)} placeholder="0" className="w-full h-8 px-3 rounded-lg bg-[#07131D]/90 border border-[#0C5283] text-white" />
+                  <input type="number" value={filtroSaldoFisicoMaiorQue} onChange={(e) => setFiltroSaldoFisicoMaiorQue(e.target.value)} placeholder="0" className="w-full h-8 px-3 rounded-lg bg-[#030D14]/90 border border-cyan-800/60 text-white focus:outline-none focus:border-emerald-400" />
                 </div>
               </div>
 
               {/* Tabela */}
-              <div className="bg-[#0A1D2D]/90 border border-[#0C5283]/40 rounded-2xl overflow-hidden shadow-xl backdrop-blur-md">
+              <div className="bg-[#051A24]/90 border border-cyan-800/40 rounded-2xl overflow-hidden shadow-xl backdrop-blur-md">
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs text-zinc-200">
-                    <thead className="bg-[#0C5283]/40 uppercase text-[10px] tracking-wider text-zinc-300 border-b border-[#0C5283]/40 font-semibold">
+                    <thead className="bg-[#062635]/70 uppercase text-[10px] tracking-wider text-cyan-200 border-b border-cyan-800/40 font-semibold">
                       <tr>
                         <th className="py-3 px-3">Empreiteira</th>
                         <th className="py-3 px-3">Código</th>
@@ -829,22 +847,22 @@
                         <th className="py-3 px-3 text-right">Ações</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[#0C5283]/20">
+                    <tbody className="divide-y divide-cyan-900/30">
                       {materiaisFiltrados.length === 0 ? (
                         <tr><td colSpan="9" className="py-8 text-center text-zinc-400 italic">Nenhum material cadastrado.</td></tr>
                       ) : (
                         materiaisFiltrados.map((item) => (
-                          <tr key={item.id} className="hover:bg-[#0C5283]/20 transition-colors">
-                            <td className="py-3 px-3">{item.empreiteira}</td>
-                            <td className="py-3 px-3"><span className="px-2 py-0.5 rounded bg-[#07131D] text-[#FF7A00] font-mono border border-[#0C5283]">{item.codigoMaterial}</span></td>
+                          <tr key={item.id} className="hover:bg-cyan-950/40 transition-colors">
+                            <td className="py-3 px-3 font-medium text-zinc-300">{item.empreiteira}</td>
+                            <td className="py-3 px-3"><span className="px-2 py-0.5 rounded bg-[#030D14] text-emerald-400 font-mono border border-cyan-800/60">{item.codigoMaterial}</span></td>
                             <td className="py-3 px-3 font-semibold text-white">{item.descSimplificada}</td>
-                            <td className="py-3 px-3 text-center font-bold text-[#FF7A00]">{item.saldoFisico}</td>
+                            <td className="py-3 px-3 text-center font-bold text-cyan-300">{item.saldoFisico}</td>
                             <td className="py-3 px-3 font-mono">{item.codDeposito || '—'}</td>
                             <td className="py-3 px-3">{item.supervisao || '—'}</td>
                             <td className="py-3 px-3">{item.marcaEquipamento || '—'}</td>
-                            <td className="py-3 px-3"><span className="text-[11px] text-amber-300/90 font-mono bg-[#07131D] px-2 py-0.5 rounded border border-[#0C5283]/40">{item.ultimaAlteracao || '—'}</span></td>
+                            <td className="py-3 px-3"><span className="text-[11px] text-teal-300/90 font-mono bg-[#030D14] px-2 py-0.5 rounded border border-cyan-900/50">{item.ultimaAlteracao || '—'}</span></td>
                             <td className="py-3 px-3 text-right space-x-1">
-                              <button type="button" onClick={() => abrirModalEditar(item)} className="px-2 py-1 rounded bg-[#0C5283]/40 hover:bg-[#0C5283] text-zinc-200 text-xs">Editar</button>
+                              <button type="button" onClick={() => abrirModalEditar(item)} className="px-2 py-1 rounded bg-cyan-950/60 hover:bg-cyan-900 text-cyan-200 border border-cyan-800 text-xs">Editar</button>
                               <button type="button" onClick={() => solicitarSenhaParaAcao('excluir', item.id)} className="px-2 py-1 rounded bg-rose-950/40 hover:bg-rose-900 border border-rose-800 text-rose-300 text-xs">Excluir</button>
                             </td>
                           </tr>
@@ -860,58 +878,58 @@
           {/* VISTA 3: SOLICITAÇÕES */}
           {telaAtual === 'solicitacao' && (
             <main className="flex-1 p-4 sm:p-8 max-w-7xl mx-auto w-full space-y-6">
-              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#0C5283]/40 pb-4">
+              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-cyan-800/40 pb-4">
                 <div className="flex items-center gap-3">
-                  <button type="button" onClick={() => setTelaAtual('capa')} className="p-2 rounded-xl bg-[#0C5283]/40 hover:bg-[#0C5283] text-zinc-200 text-xs">← Voltar</button>
+                  <button type="button" onClick={() => setTelaAtual('capa')} className="p-2 rounded-xl bg-cyan-950/60 hover:bg-cyan-900 border border-cyan-800 text-zinc-200 text-xs">← Voltar</button>
                   <h2 className="text-lg font-bold text-white">Solicitações de Material</h2>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button type="button" onClick={abrirModalNovaSolicitacao} className="px-4 py-2 rounded-xl bg-[#FF7A00] hover:bg-[#EA580C] text-white font-bold text-xs">+ Nova Solicitação</button>
+                  <button type="button" onClick={abrirModalNovaSolicitacao} className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-bold text-xs shadow-md shadow-emerald-950/50">+ Nova Solicitação</button>
                   {solicitacoes.length > 0 && (
-                    <button type="button" onClick={exportarSolicitacoesExcel} className="px-3 py-2 rounded-xl bg-[#0C5283] hover:bg-[#0C5283]/80 text-white font-semibold text-xs border border-[#0C5283]">Exportar (.xlsx)</button>
+                    <button type="button" onClick={exportarSolicitacoesExcel} className="px-3 py-2 rounded-xl bg-cyan-950/80 hover:bg-cyan-900 text-cyan-200 font-semibold text-xs border border-cyan-700/60">Exportar (.xlsx)</button>
                   )}
                 </div>
               </div>
 
               {solicitacoes.length === 0 ? (
-                <div className="bg-[#0A1D2D]/90 border border-[#0C5283]/40 rounded-2xl p-12 text-center space-y-3 backdrop-blur-md">
+                <div className="bg-[#051A24]/90 border border-cyan-800/40 rounded-2xl p-12 text-center space-y-3 backdrop-blur-md">
                   <span className="text-3xl">📋</span>
                   <h3 className="text-sm font-bold text-white">Nenhuma solicitação registrada</h3>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {solicitacoes.map((sol) => (
-                    <div key={sol.id} className="bg-[#0A1D2D]/90 border border-[#0C5283] rounded-2xl p-4 space-y-3.5 shadow-lg text-xs flex flex-col justify-between backdrop-blur-md">
+                    <div key={sol.id} className="bg-[#051A24]/90 border border-cyan-800/60 rounded-2xl p-4 space-y-3.5 shadow-lg text-xs flex flex-col justify-between backdrop-blur-md">
                       <div className="space-y-2.5">
-                        <div className="flex justify-between items-start border-b border-[#0C5283]/40 pb-2">
+                        <div className="flex justify-between items-start border-b border-cyan-800/40 pb-2">
                           <div>
                             <span className="font-bold text-white text-sm">{sol.nomeEmpreiteira}</span>
-                            <p className="text-[11px] text-zinc-400 mt-0.5">Obra: <strong className="text-zinc-200">{sol.obra}</strong> | SIGCO: <strong className="text-[#FF7A00]">{sol.sigco}</strong></p>
+                            <p className="text-[11px] text-zinc-400 mt-0.5">Obra: <strong className="text-zinc-200">{sol.obra}</strong> | SIGCO: <strong className="text-emerald-400">{sol.sigco}</strong></p>
                           </div>
                           <button type="button" onClick={() => solicitarSenhaParaAcao('excluir_solicitacao', sol.id)} className="p-1 px-1.5 rounded bg-rose-950/40 hover:bg-rose-900 border border-rose-800 text-rose-300 text-[11px]">🗑️ Excluir</button>
                         </div>
                         <div className="space-y-1">
-                          <span className="text-[10px] uppercase font-bold text-zinc-400">EED SOLICITADO:</span>
+                          <span className="text-[10px] uppercase font-bold text-cyan-300">EED SOLICITADO:</span>
                           {sol.materiais.map((item, idx) => (
-                            <div key={idx} className="flex justify-between items-center bg-[#07131D]/90 p-2 rounded-lg border border-[#0C5283]/30">
+                            <div key={idx} className="flex justify-between items-center bg-[#030D14]/90 p-2 rounded-lg border border-cyan-900/40">
                               <span className="text-zinc-200 truncate">{item.material}</span>
-                              <span className="text-[#FF7A00] font-bold ml-2">Qtd: {item.quantidade}</span>
+                              <span className="text-emerald-400 font-bold ml-2">Qtd: {item.quantidade}</span>
                             </div>
                           ))}
                         </div>
-                        {sol.observacao && <p className="text-[11px] text-zinc-400 italic bg-[#07131D]/90 p-2 rounded-lg">"{sol.observacao}"</p>}
+                        {sol.observacao && <p className="text-[11px] text-zinc-400 italic bg-[#030D14]/90 p-2 rounded-lg border border-cyan-950">"{sol.observacao}"</p>}
                       </div>
 
-                      <div className="pt-2 border-t border-[#0C5283]/40 space-y-2">
+                      <div className="pt-2 border-t border-cyan-800/40 space-y-2">
                         <select
                           value={sol.status || 'Solicitado'}
                           onChange={(e) => atualizarStatusSolicitacao(sol.id, e.target.value)}
                           className={`w-full h-8 px-2.5 rounded-lg border text-xs font-semibold ${obterBadgeStatus(sol.status || 'Solicitado')}`}
                         >
-                          <option value="Solicitado" className="bg-[#0A1D2D] text-white">Solicitado</option>
-                          <option value="Aprovado" className="bg-[#0A1D2D] text-emerald-300">Aprovado</option>
-                          <option value="Reprovado" className="bg-[#0A1D2D] text-rose-300">Reprovado</option>
-                          <option value="EMD gerada (Concluido)" className="bg-[#0A1D2D] text-purple-300">EMD gerada (Concluído)</option>
+                          <option value="Solicitado" className="bg-[#04121A] text-white">Solicitado</option>
+                          <option value="Aprovado" className="bg-[#04121A] text-emerald-300">Aprovado</option>
+                          <option value="Reprovado" className="bg-[#04121A] text-rose-300">Reprovado</option>
+                          <option value="EMD gerada (Concluido)" className="bg-[#04121A] text-cyan-300">EMD gerada (Concluído)</option>
                         </select>
 
                         {sol.status === 'EMD gerada (Concluido)' && (
@@ -920,12 +938,12 @@
                             value={sol.codigoEMD || ''}
                             onChange={(e) => atualizarCodigoEMD(sol.id, e.target.value)}
                             placeholder="Número da EMD..."
-                            className="w-full h-7 px-2.5 rounded-lg bg-[#0A1D2D] border border-purple-500/50 text-white text-xs"
+                            className="w-full h-7 px-2.5 rounded-lg bg-[#030D14] border border-cyan-500/50 text-white text-xs"
                           />
                         )}
                         <div className="text-[10px] text-zinc-400 flex justify-between">
                           <span>Solicitante: {sol.solicitante ? sol.solicitante.split('@')[0] : '—'}</span>
-                          <span className="text-amber-300/90">{sol.ultimaAlteracao || '—'}</span>
+                          <span className="text-teal-300/90">{sol.ultimaAlteracao || '—'}</span>
                         </div>
                       </div>
                     </div>
@@ -938,19 +956,19 @@
           {/* VISTA 4: GERENCIAR ACESSO */}
           {telaAtual === 'gerenciar' && ehAdministrador && (
             <main className="flex-1 p-4 sm:p-8 max-w-3xl mx-auto w-full space-y-6">
-              <div className="flex items-center gap-3 border-b border-[#0C5283]/40 pb-4">
-                <button type="button" onClick={() => setTelaAtual('capa')} className="p-2 rounded-xl bg-[#0C5283]/40 hover:bg-[#0C5283] text-zinc-200 text-xs">← Voltar</button>
-                <h2 className="text-lg font-bold text-white">Gerenciar e Liberar Acesso (Nuvem)</h2>
+              <div className="flex items-center gap-3 border-b border-cyan-800/40 pb-4">
+                <button type="button" onClick={() => setTelaAtual('capa')} className="p-2 rounded-xl bg-cyan-950/60 hover:bg-cyan-900 border border-cyan-800 text-zinc-200 text-xs">← Voltar</button>
+                <h2 className="text-lg font-bold text-white">Gerenciar e Liberar Acesso</h2>
               </div>
 
               {/* Solicitações Pendentes */}
-              <div className="bg-[#0A1D2D]/90 border border-[#FF7A00]/50 rounded-2xl p-5 space-y-3 backdrop-blur-md">
+              <div className="bg-[#051A24]/90 border border-emerald-500/50 rounded-2xl p-5 space-y-3 backdrop-blur-md">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-white flex items-center gap-2">
                     <span>📩</span>
                     <span>Solicitações de Acesso Pendentes</span>
                   </span>
-                  <span className="text-[10px] bg-[#FF7A00]/20 text-[#FF7A00] px-2 py-0.5 rounded-full font-bold border border-[#FF7A00]/30">
+                  <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full font-bold border border-emerald-500/40">
                     {solicitacoesAcesso.length} pendente(s)
                   </span>
                 </div>
@@ -960,7 +978,7 @@
                 ) : (
                   <div className="space-y-2 pt-1">
                     {solicitacoesAcesso.map((emailPend) => (
-                      <div key={emailPend} className="flex items-center justify-between p-3 rounded-xl bg-[#07131D]/90 border border-[#0C5283] text-xs">
+                      <div key={emailPend} className="flex items-center justify-between p-3 rounded-xl bg-[#030D14]/90 border border-cyan-800/60 text-xs">
                         <span className="font-medium text-white">{emailPend}</span>
                         <div className="flex items-center gap-2">
                           <button type="button" onClick={() => aprovarSolicitacao(emailPend)} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs">Aprovar</button>
@@ -973,7 +991,7 @@
               </div>
 
               {/* Liberar Manual */}
-              <form onSubmit={liberarNovoAcessoManual} className="space-y-3 bg-[#0A1D2D]/90 p-5 rounded-2xl border border-[#0C5283] backdrop-blur-md">
+              <form onSubmit={liberarNovoAcessoManual} className="space-y-3 bg-[#051A24]/90 p-5 rounded-2xl border border-cyan-800/60 backdrop-blur-md">
                 <label className="text-xs font-bold text-white block">Liberar Novo Acesso Manualmente:</label>
                 <div className="flex gap-2">
                   <input
@@ -982,23 +1000,23 @@
                     value={novoEmailAcesso}
                     onChange={(e) => setNovoEmailAcesso(e.target.value)}
                     placeholder="usuario@energisa.com.br"
-                    className="flex-1 h-10 px-3.5 rounded-xl bg-[#07131D]/90 border border-[#0C5283] text-xs text-white"
+                    className="flex-1 h-10 px-3.5 rounded-xl bg-[#030D14]/90 border border-cyan-800/60 text-xs text-white focus:outline-none focus:border-emerald-400"
                   />
-                  <button type="submit" className="px-5 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-xs">Liberar</button>
+                  <button type="submit" className="px-5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-90 text-white font-bold text-xs">Liberar</button>
                 </div>
               </form>
 
               {/* Lista Autorizados */}
-              <div className="bg-[#0A1D2D]/90 border border-[#0C5283]/40 rounded-2xl p-5 space-y-3 backdrop-blur-md">
-                <span className="text-xs font-bold text-zinc-300 block">Usuários Atualmente Autorizados ({usuariosPermitidos.length}):</span>
+              <div className="bg-[#051A24]/90 border border-cyan-800/40 rounded-2xl p-5 space-y-3 backdrop-blur-md">
+                <span className="text-xs font-bold text-cyan-200 block">Usuários Atualmente Autorizados ({usuariosPermitidos.length}):</span>
                 <div className="space-y-2">
                   {usuariosPermitidos.map((user) => (
-                    <div key={user} className="flex items-center justify-between p-3 rounded-xl bg-[#07131D]/90 border border-[#0C5283]/50 text-xs">
+                    <div key={user} className="flex items-center justify-between p-3 rounded-xl bg-[#030D14]/90 border border-cyan-900/50 text-xs">
                       <span className="font-medium text-zinc-200">{user}</span>
                       {user.toLowerCase() !== ADMIN_SISTEMA.toLowerCase() ? (
                         <button type="button" onClick={() => revogarAcesso(user)} className="px-3 py-1 rounded-lg bg-rose-950/60 hover:bg-rose-900 text-rose-300 border border-rose-800 text-xs">Revogar</button>
                       ) : (
-                        <span className="text-[10px] text-zinc-500 uppercase font-semibold">Master</span>
+                        <span className="text-[10px] text-emerald-400 uppercase font-semibold">Master</span>
                       )}
                     </div>
                   ))}
@@ -1010,8 +1028,8 @@
           {/* MODAL: NOVA SOLICITAÇÃO */}
           {modalSolicitacaoAberto && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm">
-              <div className="bg-[#0A1D2D] border border-[#0C5283] rounded-2xl p-6 max-w-2xl w-full shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
-                <div className="flex items-center justify-between border-b border-[#0C5283]/40 pb-3">
+              <div className="bg-[#051A24] border border-cyan-700/60 rounded-2xl p-6 max-w-2xl w-full shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
+                <div className="flex items-center justify-between border-b border-cyan-800/40 pb-3">
                   <h3 className="font-bold text-base text-white">📋 Solicitação de Material</h3>
                   <button type="button" onClick={() => setModalSolicitacaoAberto(false)} className="text-zinc-400 hover:text-white">✕</button>
                 </div>
@@ -1019,39 +1037,39 @@
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block font-semibold text-zinc-300 mb-1">Obra *</label>
-                      <input type="text" required value={solicitacaoObra} onChange={(e) => setSolicitacaoObra(e.target.value)} className="w-full h-10 px-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white" />
+                      <input type="text" required value={solicitacaoObra} onChange={(e) => setSolicitacaoObra(e.target.value)} className="w-full h-10 px-3 rounded-xl bg-[#030D14] border border-cyan-800/60 text-white" />
                     </div>
                     <div>
                       <label className="block font-semibold text-zinc-300 mb-1">Sigco *</label>
-                      <input type="text" required value={solicitacaoSigco} onChange={(e) => setSolicitacaoSigco(e.target.value)} className="w-full h-10 px-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white" />
+                      <input type="text" required value={solicitacaoSigco} onChange={(e) => setSolicitacaoSigco(e.target.value)} className="w-full h-10 px-3 rounded-xl bg-[#030D14] border border-cyan-800/60 text-white" />
                     </div>
                     <div>
                       <label className="block font-semibold text-zinc-300 mb-1">Supervisão *</label>
-                      <input type="text" required value={solicitacaoSupervisao} onChange={(e) => setSolicitacaoSupervisao(e.target.value)} className="w-full h-10 px-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white" />
+                      <input type="text" required value={solicitacaoSupervisao} onChange={(e) => setSolicitacaoSupervisao(e.target.value)} className="w-full h-10 px-3 rounded-xl bg-[#030D14] border border-cyan-800/60 text-white" />
                     </div>
                     <div>
                       <label className="block font-semibold text-zinc-300 mb-1">Localidade *</label>
-                      <input type="text" required value={solicitacaoLocalidade} onChange={(e) => setSolicitacaoLocalidade(e.target.value)} className="w-full h-10 px-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white" />
+                      <input type="text" required value={solicitacaoLocalidade} onChange={(e) => setSolicitacaoLocalidade(e.target.value)} className="w-full h-10 px-3 rounded-xl bg-[#030D14] border border-cyan-800/60 text-white" />
                     </div>
                     <div>
                       <label className="block font-semibold text-zinc-300 mb-1">Nome da Empreiteira *</label>
-                      <input type="text" required value={solicitacaoEmpreiteira} onChange={(e) => setSolicitacaoEmpreiteira(e.target.value)} className="w-full h-10 px-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white" />
+                      <input type="text" required value={solicitacaoEmpreiteira} onChange={(e) => setSolicitacaoEmpreiteira(e.target.value)} className="w-full h-10 px-3 rounded-xl bg-[#030D14] border border-cyan-800/60 text-white" />
                     </div>
                     <div>
                       <label className="block font-semibold text-zinc-300 mb-1">Data de Programação *</label>
-                      <input type="date" required value={solicitacaoDataProgramacao} onChange={(e) => setSolicitacaoDataProgramacao(e.target.value)} className="w-full h-10 px-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white" />
+                      <input type="date" required value={solicitacaoDataProgramacao} onChange={(e) => setSolicitacaoDataProgramacao(e.target.value)} className="w-full h-10 px-3 rounded-xl bg-[#030D14] border border-cyan-800/60 text-white" />
                     </div>
                   </div>
 
-                  <div className="bg-[#07131D] border border-[#0C5283]/60 rounded-xl p-4 space-y-3">
+                  <div className="bg-[#030D14] border border-cyan-800/50 rounded-xl p-4 space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="font-bold text-white text-xs">EED Solicitado</span>
-                      <button type="button" onClick={adicionarLinhaMaterial} className="px-3 py-1.5 rounded-lg bg-[#0C5283] text-white font-bold text-xs">+ Adicionar EED</button>
+                      <span className="font-bold text-cyan-300 text-xs">EED Solicitado</span>
+                      <button type="button" onClick={adicionarLinhaMaterial} className="px-3 py-1.5 rounded-lg bg-cyan-950 hover:bg-cyan-900 border border-cyan-700 text-cyan-200 font-bold text-xs">+ Adicionar EED</button>
                     </div>
                     {listaItensSolicitacao.map((item, index) => (
                       <div key={index} className="flex items-center gap-2">
-                        <input type="text" required value={item.material} onChange={(e) => atualizarItemMaterial(index, 'material', e.target.value)} placeholder={`EED ${index + 1}`} className="flex-1 h-9 px-3 rounded-lg bg-[#0A1D2D] border border-[#0C5283] text-white text-xs" />
-                        <input type="number" min="1" required value={item.quantidade} onChange={(e) => atualizarItemMaterial(index, 'quantidade', Number(e.target.value))} className="w-24 h-9 px-2 text-center rounded-lg bg-[#0A1D2D] border border-[#0C5283] text-white text-xs" />
+                        <input type="text" required value={item.material} onChange={(e) => atualizarItemMaterial(index, 'material', e.target.value)} placeholder={`EED ${index + 1}`} className="flex-1 h-9 px-3 rounded-lg bg-[#051A24] border border-cyan-800/60 text-white text-xs" />
+                        <input type="number" min="1" required value={item.quantidade} onChange={(e) => atualizarItemMaterial(index, 'quantidade', Number(e.target.value))} className="w-24 h-9 px-2 text-center rounded-lg bg-[#051A24] border border-cyan-800/60 text-white text-xs" />
                         {listaItensSolicitacao.length > 1 && (
                           <button type="button" onClick={() => removerLinhaMaterial(index)} className="h-9 w-9 rounded-lg bg-rose-950/60 text-rose-300 border border-rose-800">✕</button>
                         )}
@@ -1061,12 +1079,12 @@
 
                   <div>
                     <label className="block font-semibold text-zinc-300 mb-1">Observação</label>
-                    <textarea rows="3" value={solicitacaoObservacao} onChange={(e) => setSolicitacaoObservacao(e.target.value)} className="w-full p-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white resize-none"></textarea>
+                    <textarea rows="3" value={solicitacaoObservacao} onChange={(e) => setSolicitacaoObservacao(e.target.value)} className="w-full p-3 rounded-xl bg-[#030D14] border border-cyan-800/60 text-white resize-none"></textarea>
                   </div>
 
-                  <div className="flex justify-end gap-2 pt-3 border-t border-[#0C5283]/40">
+                  <div className="flex justify-end gap-2 pt-3 border-t border-cyan-800/40">
                     <button type="button" onClick={() => setModalSolicitacaoAberto(false)} className="px-4 py-2 rounded-xl text-zinc-400">Cancelar</button>
-                    <button type="submit" className="px-5 py-2 rounded-xl bg-[#FF7A00] hover:bg-[#EA580C] text-white font-bold">Gravar Solicitação</button>
+                    <button type="submit" className="px-5 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:opacity-90 text-white font-bold">Gravar Solicitação</button>
                   </div>
                 </form>
               </div>
@@ -1076,8 +1094,8 @@
           {/* MODAL: ESTOQUE */}
           {modalMaterialAberto && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm">
-              <div className="bg-[#0A1D2D] border border-[#0C5283] rounded-2xl p-6 max-w-2xl w-full shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-                <div className="flex items-center justify-between border-b border-[#0C5283]/40 pb-3">
+              <div className="bg-[#051A24] border border-cyan-700/60 rounded-2xl p-6 max-w-2xl w-full shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+                <div className="flex items-center justify-between border-b border-cyan-800/40 pb-3">
                   <h3 className="font-bold text-base text-white">{materialEmEdicao ? 'Editar Material' : 'Adicionar Material'}</h3>
                   <button type="button" onClick={() => setModalMaterialAberto(false)} className="text-zinc-400">✕</button>
                 </div>
@@ -1085,44 +1103,44 @@
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block font-semibold text-zinc-300 mb-1">Empreiteira *</label>
-                      <input type="text" required value={campoEmpreiteira} onChange={(e) => setCampoEmpreiteira(e.target.value)} className="w-full h-10 px-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white" />
+                      <input type="text" required value={campoEmpreiteira} onChange={(e) => setCampoEmpreiteira(e.target.value)} className="w-full h-10 px-3 rounded-xl bg-[#030D14] border border-cyan-800/60 text-white" />
                     </div>
                     <div>
                       <label className="block font-semibold text-zinc-300 mb-1">Código Material *</label>
-                      <input type="text" required value={campoCodigoMaterial} onChange={(e) => setCampoCodigoMaterial(e.target.value)} className="w-full h-10 px-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white" />
+                      <input type="text" required value={campoCodigoMaterial} onChange={(e) => setCampoCodigoMaterial(e.target.value)} className="w-full h-10 px-3 rounded-xl bg-[#030D14] border border-cyan-800/60 text-white" />
                     </div>
                     <div className="sm:col-span-2">
                       <label className="block font-semibold text-zinc-300 mb-1">Descrição *</label>
-                      <input type="text" required value={campoDescSimplificada} onChange={(e) => setCampoDescSimplificada(e.target.value)} className="w-full h-10 px-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white" />
+                      <input type="text" required value={campoDescSimplificada} onChange={(e) => setCampoDescSimplificada(e.target.value)} className="w-full h-10 px-3 rounded-xl bg-[#030D14] border border-cyan-800/60 text-white" />
                     </div>
                     <div>
                       <label className="block font-semibold text-zinc-300 mb-1">Saldo Físico *</label>
-                      <input type="number" min="0" required value={campoSaldoFisico} onChange={(e) => setCampoSaldoFisico(e.target.value === '' ? '' : Number(e.target.value))} className="w-full h-10 px-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white" />
+                      <input type="number" min="0" required value={campoSaldoFisico} onChange={(e) => setCampoSaldoFisico(e.target.value === '' ? '' : Number(e.target.value))} className="w-full h-10 px-3 rounded-xl bg-[#030D14] border border-cyan-800/60 text-white" />
                     </div>
                     <div>
                       <label className="block font-semibold text-zinc-300 mb-1">Cod Depósito *</label>
-                      <input type="text" required value={campoCodDeposito} onChange={(e) => setCampoCodDeposito(e.target.value)} className="w-full h-10 px-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white" />
+                      <input type="text" required value={campoCodDeposito} onChange={(e) => setCampoCodDeposito(e.target.value)} className="w-full h-10 px-3 rounded-xl bg-[#030D14] border border-cyan-800/60 text-white" />
                     </div>
                     <div>
                       <label className="block font-semibold text-zinc-300 mb-1">Supervisão</label>
-                      <input type="text" value={campoSupervisao} onChange={(e) => setCampoSupervisao(e.target.value)} className="w-full h-10 px-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white" />
+                      <input type="text" value={campoSupervisao} onChange={(e) => setCampoSupervisao(e.target.value)} className="w-full h-10 px-3 rounded-xl bg-[#030D14] border border-cyan-800/60 text-white" />
                     </div>
                     <div>
                       <label className="block font-semibold text-zinc-300 mb-1">Tipo de Depósito</label>
-                      <input type="text" required value={campoTipoDeposito} onChange={(e) => setCampoTipoDeposito(e.target.value)} className="w-full h-10 px-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white" />
+                      <input type="text" required value={campoTipoDeposito} onChange={(e) => setCampoTipoDeposito(e.target.value)} className="w-full h-10 px-3 rounded-xl bg-[#030D14] border border-cyan-800/60 text-white" />
                     </div>
                     <div className="sm:col-span-2">
                       <label className="block font-semibold text-zinc-300 mb-1">Marca</label>
-                      <input type="text" value={campoMarcaEquipamento} onChange={(e) => setCampoMarcaEquipamento(e.target.value)} className="w-full h-10 px-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white" />
+                      <input type="text" value={campoMarcaEquipamento} onChange={(e) => setCampoMarcaEquipamento(e.target.value)} className="w-full h-10 px-3 rounded-xl bg-[#030D14] border border-cyan-800/60 text-white" />
                     </div>
                   </div>
                   <div>
                     <label className="block font-semibold text-zinc-300 mb-1">Observação</label>
-                    <textarea rows="3" value={campoObservacao} onChange={(e) => setCampoObservacao(e.target.value)} className="w-full p-3 rounded-xl bg-[#07131D] border border-[#0C5283] text-white resize-none"></textarea>
+                    <textarea rows="3" value={campoObservacao} onChange={(e) => setCampoObservacao(e.target.value)} className="w-full p-3 rounded-xl bg-[#030D14] border border-cyan-800/60 text-white resize-none"></textarea>
                   </div>
-                  <div className="flex justify-end gap-2 pt-3 border-t border-[#0C5283]/40">
+                  <div className="flex justify-end gap-2 pt-3 border-t border-cyan-800/40">
                     <button type="button" onClick={() => setModalMaterialAberto(false)} className="px-4 py-2 rounded-xl text-zinc-400">Cancelar</button>
-                    <button type="submit" className="px-5 py-2 rounded-xl bg-[#FF7A00] hover:bg-[#EA580C] text-white font-bold">{materialEmEdicao ? 'Salvar Alterações' : 'Cadastrar'}</button>
+                    <button type="submit" className="px-5 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:opacity-90 text-white font-bold">{materialEmEdicao ? 'Salvar Alterações' : 'Cadastrar'}</button>
                   </div>
                 </form>
               </div>
@@ -1132,7 +1150,7 @@
           {/* MODAL: SENHA CHAVE DE AÇÕES (69472) */}
           {modalSenhaAberto && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
-              <div className="bg-[#0A1D2D] border border-[#FF7A00]/40 rounded-2xl p-6 max-w-sm w-full shadow-2xl space-y-4">
+              <div className="bg-[#051A24] border border-emerald-500/50 rounded-2xl p-6 max-w-sm w-full shadow-2xl space-y-4">
                 <h3 className="font-bold text-white text-sm">Autorização Requerida</h3>
                 <form onSubmit={validarSenhaEExecutar} className="space-y-3">
                   <input
@@ -1145,12 +1163,12 @@
                       setExibirErroSenha(false);
                     }}
                     placeholder="Digite a senha..."
-                    className="w-full h-11 px-3.5 text-center tracking-widest text-lg font-bold rounded-xl bg-[#07131D] border border-[#0C5283] text-white"
+                    className="w-full h-11 px-3.5 text-center tracking-widest text-lg font-bold rounded-xl bg-[#030D14] border border-cyan-800/60 text-white focus:outline-none focus:border-emerald-400"
                   />
                   {exibirErroSenha && <p className="text-xs text-rose-400 text-center">Senha incorreta!</p>}
                   <div className="flex justify-end gap-2 pt-2">
                     <button type="button" onClick={() => setModalSenhaAberto(false)} className="px-4 py-2 rounded-xl text-zinc-400 text-xs">Cancelar</button>
-                    <button type="submit" className="px-4 py-2 rounded-xl bg-[#FF7A00] hover:bg-[#EA580C] text-white font-bold text-xs">Confirmar</button>
+                    <button type="submit" className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:opacity-90 text-white font-bold text-xs">Confirmar</button>
                   </div>
                 </form>
               </div>
